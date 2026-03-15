@@ -7,7 +7,7 @@ import { Download, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.nextgenintelligence.co.za';
 
 export default function ExportsPage() {
   const { toast } = useToast();
