@@ -115,6 +115,7 @@ function SpecialForm({ special, onClose }: { special: Special | null; onClose: (
   const [days, setDays] = useState<string[]>(special?.days_of_week ?? []);
   const [startDate, setStartDate] = useState(special?.start_at?.slice(0, 10) ?? '');
   const [endDate, setEndDate] = useState(special?.end_at?.slice(0, 10) ?? '');
+  const [imageUrl, setImageUrl] = useState(special?.image_url ?? '');
 
   const mutation = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
@@ -138,6 +139,7 @@ function SpecialForm({ special, onClose }: { special: Special | null; onClose: (
       days_of_week: days.length > 0 ? days : undefined,
       start_at: startDate ? new Date(startDate + 'T00:00:00').toISOString() : undefined,
       end_at: endDate ? new Date(endDate + 'T23:59:59').toISOString() : undefined,
+      image_url: imageUrl || null,
     };
     mutation.mutate(payload);
   };
@@ -161,6 +163,14 @@ function SpecialForm({ special, onClose }: { special: Special | null; onClose: (
         <div className="space-y-2"><Label>Start Date</Label><Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} /></div>
         <div className="space-y-2"><Label>End Date</Label><Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
       </div>
+      <div className="space-y-2">
+        <Label>Special Image URL</Label>
+        <Input value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="https://example.com/special.jpg" />
+        <p className="text-xs text-muted-foreground">Image sent to customers when they ask for specials on this day.</p>
+      </div>
+      {imageUrl && (
+        <img src={imageUrl} alt="Special preview" className="rounded-lg max-h-40 object-contain border border-border" />
+      )}
       <div className="flex items-center gap-2"><Switch checked={isActive} onCheckedChange={setIsActive} /><Label>Active</Label></div>
       <div className="flex justify-end gap-2">
         <Button variant="outline" type="button" onClick={onClose}>Cancel</Button>

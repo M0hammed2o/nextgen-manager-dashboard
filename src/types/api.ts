@@ -230,6 +230,7 @@ export interface BusinessSettings {
   daily_order_limit: number;
   address: string | null;
   phone: string | null;
+  menu_image_url: string | null;
 }
 
 // Assets

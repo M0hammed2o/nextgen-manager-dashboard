@@ -37,6 +37,7 @@ export default function SettingsPage() {
     require_delivery_address: false,
     address: '',
     phone: '',
+    menu_image_url: null,
   });
 
   useEffect(() => {
@@ -85,6 +86,7 @@ export default function SettingsPage() {
             require_delivery_address: form.require_delivery_address,
             address: form.address || null,
             phone: form.phone || null,
+            menu_image_url: form.menu_image_url || null,
           })} disabled={saveMutation.isPending} className="gap-1.5">
           {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           Save
@@ -128,6 +130,24 @@ export default function SettingsPage() {
           <div className="space-y-2"><Label>Fallback Text</Label><Textarea value={form.fallback_text ?? ''} onChange={e => updateField('fallback_text', e.target.value)} /></div>
           <div className="space-y-2"><Label>Closed Text</Label><Textarea value={form.closed_text ?? ''} onChange={e => updateField('closed_text', e.target.value)} /></div>
         </div>
+      </section>
+
+      {/* Media */}
+      <section className="bg-card border border-border rounded-xl p-6 space-y-4">
+        <h3 className="font-semibold text-foreground">Media</h3>
+        <p className="text-sm text-muted-foreground">Images sent automatically when customers ask for your menu or specials.</p>
+        <div className="space-y-2">
+          <Label>Menu Image URL</Label>
+          <Input
+            value={form.menu_image_url ?? ''}
+            onChange={e => updateField('menu_image_url', e.target.value || null)}
+            placeholder="https://example.com/menu.jpg"
+          />
+          <p className="text-xs text-muted-foreground">Paste a public image URL. This image is sent when a customer requests the menu via WhatsApp.</p>
+        </div>
+        {form.menu_image_url && (
+          <img src={form.menu_image_url} alt="Menu preview" className="rounded-lg max-h-48 object-contain border border-border" />
+        )}
       </section>
 
       {/* Order & Delivery */}
