@@ -86,10 +86,13 @@ export interface OrderItem {
   special_instructions: string | null;
 }
 
+export type PaymentStatus = 'PENDING' | 'PAID' | 'CASH_ON_COLLECTION';
+
 export interface Order {
   id: string;
   order_number: string;
   status: OrderStatus;
+  payment_status: PaymentStatus;
   order_mode: string;
   source: string;
   subtotal_cents: number;

@@ -1,11 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import type { Order, OrderStatus, CreateOrderRequest, PaginatedResponse } from '@/types/api';
+import type { Order, PaymentStatus, CreateOrderRequest, PaginatedResponse } from '@/types/api';
 import { formatCents, formatDateTime } from '@/lib/mappers';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { PageSkeleton, EmptyState } from '@/components/shared/PageComponents';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger
@@ -13,9 +12,11 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select';
-import { ShoppingCart, Plus, Eye, Loader2, Trash2 } from 'lucide-react';
-import { useState, useCallback } from 'react';
+import { ShoppingCart, Plus, Eye, Loader2, Trash2, Bell } from 'lucide-react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
+
+// ── Status colour maps ───────────────────────────────────────────────────────
 
 const statusColors: Record<string, string> = {
   NEW: 'bg-warning/10 text-warning',
@@ -27,13 +28,50 @@ const statusColors: Record<string, string> = {
   CANCELLED: 'bg-destructive/10 text-destructive',
 };
 
+const paymentColors: Record<PaymentStatus, string> = {
+  PENDING: 'bg-warning/10 text-warning border border-warning/30',
+  PAID: 'bg-success/10 text-[hsl(var(--success))] border border-success/30',
+  CASH_ON_COLLECTION: 'bg-muted text-muted-foreground border border-border',
+};
+
+const paymentLabels: Record<PaymentStatus, string> = {
+  PENDING: 'Unpaid',
+  PAID: 'Paid',
+  CASH_ON_COLLECTION: 'Cash',
+};
+
+// ── Audio alert (plays a short beep for new orders) ──────────────────────────
+
+function playNewOrderSound() {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.setValueAtTime(660, ctx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.4, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.5);
+  } catch {
+    // AudioContext not available (e.g. in tests)
+  }
+}
+
+// ── Main page ────────────────────────────────────────────────────────────────
+
 export default function OrdersPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('live');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [newOrderCount, setNewOrderCount] = useState(0);
+  const sseRef = useRef<EventSource | null>(null);
 
+  // ── Data fetching (5 s poll as fallback) ──────────────────────────────────
   const { data: ordersRes, isLoading } = useQuery({
     queryKey: ['orders', statusFilter],
     queryFn: () => {
@@ -43,11 +81,53 @@ export default function OrdersPage() {
       const qs = params.toString();
       return apiClient.get<PaginatedResponse<Order>>(`/v1/business/orders${qs ? `?${qs}` : ''}`);
     },
-    refetchInterval: 15000,
+    refetchInterval: 5000,
   });
 
   const orders = ordersRes?.data ?? [];
 
+  // ── SSE subscription for real-time push ───────────────────────────────────
+  useEffect(() => {
+    const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    if (!token) return;
+
+    // EventSource doesn't natively support auth headers; use URL param as fallback
+    // Most deployments proxy the auth via cookie or a token query param.
+    // If your setup doesn't support query param auth, the 5 s poll above is the fallback.
+    const url = `/v1/business/orders/live/stream?token=${encodeURIComponent(token)}`;
+    const es = new EventSource(url);
+    sseRef.current = es;
+
+    es.addEventListener('order_update', (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.type === 'order_created' || data.type === 'new_order') {
+          playNewOrderSound();
+          setNewOrderCount(n => n + 1);
+          toast({
+            title: `🛎 New Order #${data.order_number}`,
+            description: data.items_summary ?? '',
+          });
+        }
+        // Invalidate to pick up the new/updated order
+        queryClient.invalidateQueries({ queryKey: ['orders'] });
+      } catch {
+        // ignore malformed events
+      }
+    });
+
+    es.onerror = () => {
+      // SSE failed — polling at 5 s is the fallback, no need to log
+      es.close();
+    };
+
+    return () => {
+      es.close();
+      sseRef.current = null;
+    };
+  }, []);
+
+  // ── Mutations ─────────────────────────────────────────────────────────────
   const updateStatusMutation = useMutation({
     mutationFn: ({ orderId, status, reason }: { orderId: string; status: string; reason?: string }) =>
       apiClient.post(`/v1/business/orders/${orderId}/status`, { status, reason }),
@@ -58,23 +138,47 @@ export default function OrdersPage() {
     onError: (err: Error) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
   });
 
+  const updatePaymentMutation = useMutation({
+    mutationFn: ({ orderId, payment_status }: { orderId: string; payment_status: PaymentStatus }) =>
+      apiClient.patch(`/v1/business/orders/${orderId}/payment`, { payment_status }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      toast({ title: 'Payment status updated' });
+    },
+    onError: (err: Error) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
+  });
+
   if (isLoading) return <PageSkeleton />;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Orders</h1>
-          <p className="text-sm text-muted-foreground">{orders.length} orders</p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+              Orders
+              {newOrderCount > 0 && (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-destructive text-destructive-foreground animate-pulse">
+                  <Bell className="w-3 h-3" /> {newOrderCount} new
+                </span>
+              )}
+            </h1>
+            <p className="text-sm text-muted-foreground">{orders.length} orders</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
+          {newOrderCount > 0 && (
+            <Button variant="outline" size="sm" onClick={() => setNewOrderCount(0)}>
+              Clear alerts
+            </Button>
+          )}
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-40">
               <SelectValue placeholder="Filter status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="live">Live Orders</SelectItem>
+              <SelectItem value="all">All Orders</SelectItem>
               <SelectItem value="NEW">New</SelectItem>
               <SelectItem value="ACCEPTED">Accepted</SelectItem>
               <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
@@ -111,6 +215,7 @@ export default function OrdersPage() {
                   <th className="text-left p-4 font-medium text-muted-foreground">Order</th>
                   <th className="text-left p-4 font-medium text-muted-foreground">Customer</th>
                   <th className="text-left p-4 font-medium text-muted-foreground">Status</th>
+                  <th className="text-left p-4 font-medium text-muted-foreground">Payment</th>
                   <th className="text-left p-4 font-medium text-muted-foreground">Total</th>
                   <th className="text-left p-4 font-medium text-muted-foreground">Date</th>
                   <th className="text-right p-4 font-medium text-muted-foreground">Actions</th>
@@ -118,7 +223,10 @@ export default function OrdersPage() {
               </thead>
               <tbody>
                 {orders.map((order) => (
-                  <tr key={order.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                  <tr
+                    key={order.id}
+                    className={`border-b border-border/50 hover:bg-muted/20 transition-colors ${order.status === 'NEW' ? 'bg-warning/5' : ''}`}
+                  >
                     <td className="p-4 font-medium text-foreground">#{order.order_number}</td>
                     <td className="p-4 text-foreground">{order.customer_name ?? 'Walk-in'}</td>
                     <td className="p-4">
@@ -126,14 +234,41 @@ export default function OrdersPage() {
                         {order.status}
                       </span>
                     </td>
-                    <td className="p-4 text-foreground">{formatCents(order.total_cents)}</td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${paymentColors[order.payment_status ?? 'PENDING']}`}>
+                          {paymentLabels[order.payment_status ?? 'PENDING']}
+                        </span>
+                        {(order.payment_status === 'PENDING') && (
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-xs text-success hover:text-success"
+                              onClick={() => updatePaymentMutation.mutate({ orderId: order.id, payment_status: 'PAID' })}
+                            >
+                              Mark Paid
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-xs"
+                              onClick={() => updatePaymentMutation.mutate({ orderId: order.id, payment_status: 'CASH_ON_COLLECTION' })}
+                            >
+                              Cash
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="p-4 text-foreground font-medium">{formatCents(order.total_cents)}</td>
                     <td className="p-4 text-muted-foreground">{formatDateTime(order.created_at)}</td>
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <Button variant="ghost" size="icon" onClick={() => setSelectedOrder(order)}>
                           <Eye className="w-4 h-4" />
                         </Button>
-                        {!['COLLECTED','DELIVERED','CANCELLED'].includes(order.status) && (
+                        {!['COLLECTED', 'DELIVERED', 'CANCELLED'].includes(order.status) && (
                           <Select
                             onValueChange={(val) => updateStatusMutation.mutate({ orderId: order.id, status: val })}
                           >
@@ -173,10 +308,22 @@ export default function OrdersPage() {
                 <div><span className="text-muted-foreground">Phone:</span> <span className="text-foreground">{selectedOrder.phone_number ?? '—'}</span></div>
                 <div><span className="text-muted-foreground">Mode:</span> <span className="text-foreground">{selectedOrder.order_mode}</span></div>
                 <div><span className="text-muted-foreground">Source:</span> <span className="text-foreground">{selectedOrder.source}</span></div>
-                <div><span className="text-muted-foreground">Status:</span> <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColors[selectedOrder.status] ?? ''}`}>{selectedOrder.status}</span></div>
+                <div>
+                  <span className="text-muted-foreground">Status:</span>{' '}
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColors[selectedOrder.status] ?? ''}`}>{selectedOrder.status}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Payment:</span>{' '}
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${paymentColors[selectedOrder.payment_status ?? 'PENDING']}`}>
+                    {paymentLabels[selectedOrder.payment_status ?? 'PENDING']}
+                  </span>
+                </div>
               </div>
               {selectedOrder.delivery_address && (
-                <div className="p-3 rounded-lg bg-muted/50 text-sm"><span className="text-xs text-muted-foreground">Delivery Address:</span> <span className="text-foreground">{selectedOrder.delivery_address}</span></div>
+                <div className="p-3 rounded-lg bg-muted/50 text-sm">
+                  <span className="text-xs text-muted-foreground">Delivery Address:</span>{' '}
+                  <span className="text-foreground">{selectedOrder.delivery_address}</span>
+                </div>
               )}
               <div>
                 <h4 className="font-medium text-foreground mb-2">Items</h4>
@@ -185,7 +332,9 @@ export default function OrdersPage() {
                     <div key={item.id || i} className="flex justify-between items-center text-sm p-2 rounded bg-muted/30">
                       <div>
                         <span className="text-foreground">{item.quantity}× {item.name_snapshot}</span>
-                        {item.special_instructions && <p className="text-xs text-muted-foreground italic mt-0.5">{item.special_instructions}</p>}
+                        {item.special_instructions && (
+                          <p className="text-xs text-muted-foreground italic mt-0.5">{item.special_instructions}</p>
+                        )}
                       </div>
                       <span className="text-foreground font-medium">{formatCents(item.line_total_cents)}</span>
                     </div>
@@ -194,9 +343,34 @@ export default function OrdersPage() {
               </div>
               <div className="border-t border-border pt-3 space-y-1 text-sm">
                 <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span>{formatCents(selectedOrder.subtotal_cents)}</span></div>
-                {(selectedOrder.delivery_fee_cents ?? 0) > 0 && <div className="flex justify-between text-muted-foreground"><span>Delivery</span><span>{formatCents(selectedOrder.delivery_fee_cents)}</span></div>}
+                {(selectedOrder.delivery_fee_cents ?? 0) > 0 && (
+                  <div className="flex justify-between text-muted-foreground"><span>Delivery</span><span>{formatCents(selectedOrder.delivery_fee_cents)}</span></div>
+                )}
                 <div className="flex justify-between font-semibold text-foreground text-base"><span>Total</span><span>{formatCents(selectedOrder.total_cents)}</span></div>
               </div>
+              {selectedOrder.payment_status === 'PENDING' && (
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    className="flex-1"
+                    onClick={() => {
+                      updatePaymentMutation.mutate({ orderId: selectedOrder.id, payment_status: 'PAID' });
+                      setSelectedOrder(null);
+                    }}
+                  >
+                    Mark as Paid
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      updatePaymentMutation.mutate({ orderId: selectedOrder.id, payment_status: 'CASH_ON_COLLECTION' });
+                      setSelectedOrder(null);
+                    }}
+                  >
+                    Cash on Collection
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
@@ -205,7 +379,7 @@ export default function OrdersPage() {
   );
 }
 
-// ── Create Order Form (matches backend OrderCreate) ──────────────────────────
+// ── Create Order Form ────────────────────────────────────────────────────────
 
 interface LineItem { name: string; qty: number; priceRand: string; }
 
