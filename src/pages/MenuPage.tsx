@@ -26,6 +26,8 @@ export default function MenuPage() {
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<MenuCategory | null>(null);
+  const [showEditCategoryModal, setShowEditCategoryModal] = useState(false);
 
   const { data: categories = [], isLoading: loadingCats } = useQuery({
     queryKey: ['menu-categories'],
@@ -75,6 +77,24 @@ export default function MenuPage() {
           </Button>
         </div>
       </div>
+
+      {categories.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {categories.map(c => (
+            <div key={c.id} className="flex items-center gap-1 bg-muted rounded-lg px-3 py-1.5 text-sm font-medium">
+              <span>{c.name}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5 ml-0.5 text-muted-foreground hover:text-foreground"
+                onClick={() => { setEditingCategory(c); setShowEditCategoryModal(true); }}
+              >
+                <Edit className="w-3 h-3" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
@@ -150,6 +170,21 @@ export default function MenuPage() {
           />
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={showEditCategoryModal}
+        onOpenChange={open => { setShowEditCategoryModal(open); if (!open) setEditingCategory(null); }}
+      >
+        <DialogContent>
+          <DialogHeader><DialogTitle>Rename Category</DialogTitle></DialogHeader>
+          {editingCategory && (
+            <CategoryEditForm
+              category={editingCategory}
+              onClose={() => { setShowEditCategoryModal(false); setEditingCategory(null); }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -174,6 +209,42 @@ function CategoryForm({ onClose }: { onClose: () => void }) {
         <Button variant="outline" type="button" onClick={onClose}>Cancel</Button>
         <Button type="submit" disabled={createMutation.isPending}>
           {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create'}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function CategoryEditForm({ category, onClose }: { category: MenuCategory; onClose: () => void }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [name, setName] = useState(category.name);
+
+  const updateMutation = useMutation({
+    mutationFn: (data: { name: string }) =>
+      apiClient.put(`/v1/business/menu/categories/${category.id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['menu-categories'] });
+      queryClient.invalidateQueries({ queryKey: ['menu-items'] });
+      toast({ title: 'Category renamed' });
+      onClose();
+    },
+    onError: (err: Error) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
+  });
+
+  return (
+    <form
+      onSubmit={e => { e.preventDefault(); const trimmed = name.trim(); if (trimmed) updateMutation.mutate({ name: trimmed }); }}
+      className="space-y-4"
+    >
+      <div className="space-y-2">
+        <Label>Category Name</Label>
+        <Input value={name} onChange={e => setName(e.target.value)} required autoFocus />
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" type="button" onClick={onClose}>Cancel</Button>
+        <Button type="submit" disabled={updateMutation.isPending || !name.trim() || name.trim() === category.name}>
+          {updateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
         </Button>
       </div>
     </form>
