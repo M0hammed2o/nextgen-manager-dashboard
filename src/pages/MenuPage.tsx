@@ -14,7 +14,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select';
-import { UtensilsCrossed, Plus, Edit, Trash2, Search, Loader2 } from 'lucide-react';
+import { UtensilsCrossed, Plus, Edit, Trash2, Search, Loader2, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -45,6 +45,16 @@ export default function MenuPage() {
       queryClient.invalidateQueries({ queryKey: ['menu-items'] });
       toast({ title: 'Item deleted' });
     },
+  });
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: (id: string) => apiClient.delete(`/v1/business/menu/categories/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['menu-categories'] });
+      queryClient.invalidateQueries({ queryKey: ['menu-items'] });
+      toast({ title: 'Category deleted' });
+    },
+    onError: (err: Error) => toast({ title: 'Cannot delete category', description: err.message, variant: 'destructive' }),
   });
 
   if (loadingCats || loadingItems) return <PageSkeleton />;
@@ -80,19 +90,44 @@ export default function MenuPage() {
 
       {categories.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {categories.map(c => (
-            <div key={c.id} className="flex items-center gap-1 bg-muted rounded-lg px-3 py-1.5 text-sm font-medium">
-              <span>{c.name}</span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-5 w-5 ml-0.5 text-muted-foreground hover:text-foreground"
-                onClick={() => { setEditingCategory(c); setShowEditCategoryModal(true); }}
-              >
-                <Edit className="w-3 h-3" />
-              </Button>
-            </div>
-          ))}
+          {categories.map(c => {
+            const itemCount = items.filter(i => i.category_id === c.id).length;
+            return (
+              <div key={c.id} className="flex items-center gap-1 bg-muted rounded-lg px-3 py-1.5 text-sm font-medium">
+                <span>{c.name}</span>
+                <span className="text-xs text-muted-foreground ml-1">({itemCount})</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 ml-0.5 text-muted-foreground hover:text-foreground"
+                  onClick={() => { setEditingCategory(c); setShowEditCategoryModal(true); }}
+                >
+                  <Edit className="w-3 h-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 text-muted-foreground hover:text-destructive"
+                  disabled={deleteCategoryMutation.isPending}
+                  onClick={() => {
+                    if (itemCount > 0) {
+                      toast({
+                        title: 'Cannot delete category',
+                        description: `"${c.name}" has ${itemCount} item${itemCount !== 1 ? 's' : ''}. Remove or reassign them first.`,
+                        variant: 'destructive',
+                      });
+                      return;
+                    }
+                    if (window.confirm(`Delete category "${c.name}"? This cannot be undone.`)) {
+                      deleteCategoryMutation.mutate(c.id);
+                    }
+                  }}
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </div>
+            );
+          })}
         </div>
       )}
 
