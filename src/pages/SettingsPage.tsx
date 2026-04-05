@@ -247,12 +247,15 @@ export default function SettingsPage() {
           </div>
           {form.delivery_enabled && (
             <div className="space-y-2">
-              <Label>Delivery Fee (cents)</Label>
+              <Label>Default Delivery Fee (cents)</Label>
               <Input
                 type="number"
                 value={form.delivery_fee_cents ?? 0}
                 onChange={e => updateField('delivery_fee_cents', parseInt(e.target.value) || 0)}
               />
+              <p className="text-xs text-muted-foreground">
+                Reference value only. For WhatsApp orders, staff review the delivery address and set the fee manually per order — the customer approves before the order is confirmed.
+              </p>
             </div>
           )}
           <div className="flex items-center justify-between">
