@@ -246,17 +246,9 @@ export default function SettingsPage() {
             <Switch checked={form.delivery_enabled ?? false} onCheckedChange={v => updateField('delivery_enabled', v)} />
           </div>
           {form.delivery_enabled && (
-            <div className="space-y-2">
-              <Label>Default Delivery Fee (cents)</Label>
-              <Input
-                type="number"
-                value={form.delivery_fee_cents ?? 0}
-                onChange={e => updateField('delivery_fee_cents', parseInt(e.target.value) || 0)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Reference value only. For WhatsApp orders, staff review the delivery address and set the fee manually per order — the customer approves before the order is confirmed.
-              </p>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              Delivery fee is set per order by staff via the staff app. The customer approves before the order is confirmed.
+            </p>
           )}
           <div className="flex items-center justify-between">
             <Label>Require Customer Name</Label>
