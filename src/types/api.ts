@@ -151,6 +151,18 @@ export interface MenuCategory {
   is_active: boolean;
 }
 
+// Phase 8: Paid add-on — matches backend AddOnResponse
+export interface MenuAddOn {
+  id: string;
+  name: string;
+  price_cents: number;
+  min_qty: number;
+  max_qty: number;
+  default_qty: number;
+  is_active: boolean;
+  sort_order: number;
+}
+
 export interface MenuItem {
   id: string;
   category_id: string | null;
@@ -159,6 +171,7 @@ export interface MenuItem {
   price_cents: number;
   currency: string;
   options_json: Record<string, unknown> | null;
+  add_ons: MenuAddOn[];
   is_active: boolean;
   sort_order: number;
   image_url: string | null;
