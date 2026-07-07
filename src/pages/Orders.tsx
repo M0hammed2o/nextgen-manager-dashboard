@@ -329,9 +329,19 @@ export default function OrdersPage() {
                 <h4 className="font-medium text-foreground mb-2">Items</h4>
                 <div className="space-y-2">
                   {(selectedOrder.items ?? []).map((item, i) => (
-                    <div key={item.id || i} className="flex justify-between items-center text-sm p-2 rounded bg-muted/30">
+                    <div key={item.id || i} className="flex justify-between items-start text-sm p-2 rounded bg-muted/30">
                       <div>
                         <span className="text-foreground">{item.quantity}× {item.name_snapshot}</span>
+                        {item.add_ons_snapshot?.map((ao) => (
+                          <p key={ao.name} className="text-xs text-muted-foreground mt-0.5">
+                            ✦ {ao.name} +{formatCents(ao.price_cents * (ao.quantity ?? 1))}
+                          </p>
+                        ))}
+                        {item.selected_options_snapshot?.filter(o => o.price_delta_cents !== 0).map((o) => (
+                          <p key={o.option} className="text-xs text-muted-foreground mt-0.5">
+                            ✦ {o.option} {o.price_delta_cents > 0 ? "+" : ""}{formatCents(o.price_delta_cents)}
+                          </p>
+                        ))}
                         {item.special_instructions && (
                           <p className="text-xs text-muted-foreground italic mt-0.5">{item.special_instructions}</p>
                         )}
