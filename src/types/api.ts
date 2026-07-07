@@ -94,13 +94,18 @@ export interface OrderItem {
   special_instructions: string | null;
 }
 
-export type PaymentStatus = 'PENDING' | 'PAID' | 'CASH_ON_COLLECTION';
+export type PaymentStatus = 'UNPAID' | 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED' | 'CASH_ON_COLLECTION';
 
 export interface Order {
   id: string;
   order_number: string;
   status: OrderStatus;
   payment_status: PaymentStatus;
+  payment_method: string | null;
+  payment_reference: string | null;
+  payment_link_url: string | null;
+  payment_required: boolean;
+  paid_at: string | null;
   order_mode: string;
   source: string;
   subtotal_cents: number;
@@ -255,6 +260,16 @@ export interface BusinessSettings {
   address: string | null;
   phone: string | null;
   menu_image_url: string | null;
+  // Payment settings
+  payment_methods_enabled: string[] | null;
+  online_payment_required: boolean;
+  payment_provider: string | null;
+  payment_timeout_minutes: number;
+  eft_bank_name: string | null;
+  eft_account_name: string | null;
+  eft_account_number: string | null;
+  eft_branch_code: string | null;
+  eft_reference_prefix: string | null;
 }
 
 // Assets

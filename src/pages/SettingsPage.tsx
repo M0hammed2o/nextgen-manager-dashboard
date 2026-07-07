@@ -31,7 +31,25 @@ type EditableSettings = Pick<BusinessSettings,
   | 'order_in_only' | 'delivery_enabled' | 'delivery_fee_cents'
   | 'require_customer_name' | 'require_phone_number' | 'require_delivery_address'
   | 'address' | 'phone' | 'menu_image_url'
+  | 'payment_methods_enabled' | 'online_payment_required' | 'payment_provider'
+  | 'payment_timeout_minutes' | 'eft_bank_name' | 'eft_account_name'
+  | 'eft_account_number' | 'eft_branch_code' | 'eft_reference_prefix'
 >;
+
+const PAYMENT_METHODS = [
+  { value: 'CASH', label: 'Cash' },
+  { value: 'PAY_ON_COLLECTION', label: 'Pay on Collection' },
+  { value: 'DIRECT_EFT', label: 'Direct EFT' },
+  { value: 'PAYMENT_LINK', label: 'Payment Link' },
+];
+
+const PAYMENT_PROVIDERS = [
+  { value: 'DIRECT_EFT', label: 'Direct EFT (no API)' },
+  { value: 'MOCK', label: 'Mock (testing only)' },
+  { value: 'YOCO', label: 'Yoco (coming soon)' },
+  { value: 'PAYFAST', label: 'PayFast (coming soon)' },
+  { value: 'STITCH', label: 'Stitch (coming soon)' },
+];
 
 const EMPTY_FORM: EditableSettings = {
   name: '',
@@ -49,6 +67,15 @@ const EMPTY_FORM: EditableSettings = {
   address: '',
   phone: '',
   menu_image_url: null,
+  payment_methods_enabled: null,
+  online_payment_required: false,
+  payment_provider: null,
+  payment_timeout_minutes: 30,
+  eft_bank_name: null,
+  eft_account_name: null,
+  eft_account_number: null,
+  eft_branch_code: null,
+  eft_reference_prefix: null,
 };
 
 export default function SettingsPage() {
@@ -80,6 +107,15 @@ export default function SettingsPage() {
         address: settings.address ?? '',
         phone: settings.phone ?? '',
         menu_image_url: settings.menu_image_url ?? null,
+        payment_methods_enabled: settings.payment_methods_enabled ?? null,
+        online_payment_required: settings.online_payment_required ?? false,
+        payment_provider: settings.payment_provider ?? null,
+        payment_timeout_minutes: settings.payment_timeout_minutes ?? 30,
+        eft_bank_name: settings.eft_bank_name ?? null,
+        eft_account_name: settings.eft_account_name ?? null,
+        eft_account_number: settings.eft_account_number ?? null,
+        eft_branch_code: settings.eft_branch_code ?? null,
+        eft_reference_prefix: settings.eft_reference_prefix ?? null,
       });
     }
   }, [settings]);
@@ -130,6 +166,15 @@ export default function SettingsPage() {
             address: form.address || null,
             phone: form.phone || null,
             menu_image_url: form.menu_image_url || null,
+            payment_methods_enabled: form.payment_methods_enabled,
+            online_payment_required: form.online_payment_required,
+            payment_provider: form.payment_provider || null,
+            payment_timeout_minutes: form.payment_timeout_minutes,
+            eft_bank_name: form.eft_bank_name || null,
+            eft_account_name: form.eft_account_name || null,
+            eft_account_number: form.eft_account_number || null,
+            eft_branch_code: form.eft_branch_code || null,
+            eft_reference_prefix: form.eft_reference_prefix || null,
           })}
           disabled={saveMutation.isPending}
           className="gap-1.5"
@@ -263,6 +308,141 @@ export default function SettingsPage() {
             <Switch checked={form.require_delivery_address ?? false} onCheckedChange={v => updateField('require_delivery_address', v)} />
           </div>
         </div>
+      </section>
+
+      {/* Payment Settings */}
+      <section className="bg-card border border-border rounded-xl p-6 space-y-4">
+        <h3 className="font-semibold text-foreground">Payment Settings</h3>
+
+        <div className="space-y-3">
+          <Label className="text-sm text-muted-foreground">Accepted Payment Methods</Label>
+          <div className="grid grid-cols-2 gap-2">
+            {PAYMENT_METHODS.map(({ value, label }) => {
+              const enabled = (form.payment_methods_enabled ?? []).includes(value);
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => {
+                    const current = form.payment_methods_enabled ?? [];
+                    updateField(
+                      'payment_methods_enabled',
+                      enabled ? current.filter(v => v !== value) : [...current, value],
+                    );
+                  }}
+                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                    enabled
+                      ? 'border-primary bg-primary/10 text-primary font-medium'
+                      : 'border-border text-muted-foreground hover:border-foreground/30'
+                  }`}
+                >
+                  <span className={`h-4 w-4 rounded border flex items-center justify-center text-xs ${
+                    enabled ? 'bg-primary border-primary text-primary-foreground' : 'border-border'
+                  }`}>
+                    {enabled ? '✓' : ''}
+                  </span>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between pt-2 border-t border-border">
+          <div>
+            <Label>Require Online Payment</Label>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Block order preparation until payment is confirmed. Orders auto-cancel if unpaid within the timeout.
+            </p>
+          </div>
+          <Switch
+            checked={form.online_payment_required ?? false}
+            onCheckedChange={v => updateField('online_payment_required', v)}
+          />
+        </div>
+
+        {form.online_payment_required && (
+          <div className="space-y-2">
+            <Label>Payment Timeout (minutes)</Label>
+            <Input
+              type="number"
+              value={form.payment_timeout_minutes ?? 30}
+              onChange={e => updateField('payment_timeout_minutes', parseInt(e.target.value, 10) || 30)}
+              className="w-32"
+              min={5}
+              max={1440}
+            />
+            <p className="text-xs text-muted-foreground">Unpaid orders are automatically cancelled after this many minutes.</p>
+          </div>
+        )}
+
+        {(form.payment_methods_enabled ?? []).includes('PAYMENT_LINK') && (
+          <div className="space-y-2 pt-2 border-t border-border">
+            <Label>Payment Link Provider</Label>
+            <select
+              value={form.payment_provider ?? ''}
+              onChange={e => updateField('payment_provider', e.target.value || null)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="">Select provider…</option>
+              {PAYMENT_PROVIDERS.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {(form.payment_methods_enabled ?? []).includes('DIRECT_EFT') && (
+          <div className="space-y-3 pt-2 border-t border-border">
+            <Label className="text-sm text-muted-foreground">Direct EFT Banking Details</Label>
+            <p className="text-xs text-muted-foreground">These details are sent to the customer via WhatsApp when they place an order.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Bank Name</Label>
+                <Input
+                  value={form.eft_bank_name ?? ''}
+                  onChange={e => updateField('eft_bank_name', e.target.value || null)}
+                  placeholder="e.g. FNB"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Account Name</Label>
+                <Input
+                  value={form.eft_account_name ?? ''}
+                  onChange={e => updateField('eft_account_name', e.target.value || null)}
+                  placeholder="e.g. My Restaurant (Pty) Ltd"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Account Number</Label>
+                <Input
+                  value={form.eft_account_number ?? ''}
+                  onChange={e => updateField('eft_account_number', e.target.value || null)}
+                  placeholder="e.g. 62812345678"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Branch Code</Label>
+                <Input
+                  value={form.eft_branch_code ?? ''}
+                  onChange={e => updateField('eft_branch_code', e.target.value || null)}
+                  placeholder="e.g. 250655"
+                />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <Label>EFT Reference Prefix</Label>
+                <Input
+                  value={form.eft_reference_prefix ?? ''}
+                  onChange={e => updateField('eft_reference_prefix', e.target.value || null)}
+                  placeholder="e.g. BAR (reference will be BAR-000123)"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave blank to use the default order number as reference (e.g. BO-000123).
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );

@@ -29,14 +29,20 @@ const statusColors: Record<string, string> = {
 };
 
 const paymentColors: Record<PaymentStatus, string> = {
+  UNPAID: 'bg-destructive/10 text-destructive border border-destructive/30',
   PENDING: 'bg-warning/10 text-warning border border-warning/30',
   PAID: 'bg-success/10 text-[hsl(var(--success))] border border-success/30',
+  FAILED: 'bg-destructive/10 text-destructive border border-destructive/30',
+  REFUNDED: 'bg-muted text-muted-foreground border border-border',
   CASH_ON_COLLECTION: 'bg-muted text-muted-foreground border border-border',
 };
 
 const paymentLabels: Record<PaymentStatus, string> = {
-  PENDING: 'Unpaid',
+  UNPAID: 'Payment Required',
+  PENDING: 'Awaiting Payment',
   PAID: 'Paid',
+  FAILED: 'Payment Failed',
+  REFUNDED: 'Refunded',
   CASH_ON_COLLECTION: 'Cash',
 };
 
