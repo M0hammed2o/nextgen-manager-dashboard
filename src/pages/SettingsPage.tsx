@@ -34,7 +34,12 @@ type EditableSettings = Pick<BusinessSettings,
   | 'payment_methods_enabled' | 'online_payment_required' | 'payment_provider'
   | 'payment_timeout_minutes' | 'eft_bank_name' | 'eft_account_name'
   | 'eft_account_number' | 'eft_branch_code' | 'eft_reference_prefix'
->;
+> & {
+  // Credential write-only fields — not in BusinessSettings (which has hints only)
+  payment_api_key: string;
+  payment_api_secret: string;
+  payment_webhook_secret: string;
+};
 
 const PAYMENT_METHODS = [
   { value: 'CASH', label: 'Cash' },
@@ -76,6 +81,10 @@ const EMPTY_FORM: EditableSettings = {
   eft_account_number: null,
   eft_branch_code: null,
   eft_reference_prefix: null,
+  // Credentials — always start blank; only send when user types a new value
+  payment_api_key: '',
+  payment_api_secret: '',
+  payment_webhook_secret: '',
 };
 
 export default function SettingsPage() {
@@ -116,6 +125,10 @@ export default function SettingsPage() {
         eft_account_number: settings.eft_account_number ?? null,
         eft_branch_code: settings.eft_branch_code ?? null,
         eft_reference_prefix: settings.eft_reference_prefix ?? null,
+        // Credentials never come back from the server — always blank on load
+        payment_api_key: '',
+        payment_api_secret: '',
+        payment_webhook_secret: '',
       });
     }
   }, [settings]);
@@ -175,6 +188,10 @@ export default function SettingsPage() {
             eft_account_number: form.eft_account_number || null,
             eft_branch_code: form.eft_branch_code || null,
             eft_reference_prefix: form.eft_reference_prefix || null,
+            // Only send credentials if the user typed something new
+            ...(form.payment_api_key ? { payment_api_key: form.payment_api_key } : {}),
+            ...(form.payment_api_secret ? { payment_api_secret: form.payment_api_secret } : {}),
+            ...(form.payment_webhook_secret ? { payment_webhook_secret: form.payment_webhook_secret } : {}),
           })}
           disabled={saveMutation.isPending}
           className="gap-1.5"
@@ -377,18 +394,94 @@ export default function SettingsPage() {
         )}
 
         {(form.payment_methods_enabled ?? []).includes('PAYMENT_LINK') && (
-          <div className="space-y-2 pt-2 border-t border-border">
-            <Label>Payment Link Provider</Label>
-            <select
-              value={form.payment_provider ?? ''}
-              onChange={e => updateField('payment_provider', e.target.value || null)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="">Select provider…</option>
-              {PAYMENT_PROVIDERS.map(({ value, label }) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </select>
+          <div className="space-y-4 pt-2 border-t border-border">
+            <div className="space-y-2">
+              <Label>Payment Link Provider</Label>
+              <select
+                value={form.payment_provider ?? ''}
+                onChange={e => updateField('payment_provider', e.target.value || null)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">Select provider…</option>
+                {PAYMENT_PROVIDERS.map(({ value, label }) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+
+            {form.payment_provider && form.payment_provider !== 'MOCK' && (
+              <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
+                <p className="text-xs font-medium text-foreground">Provider Credentials</p>
+                <p className="text-xs text-muted-foreground">
+                  {form.payment_provider === 'YOCO' && 'Enter your Yoco Secret Key and Webhook Secret from your Yoco dashboard.'}
+                  {form.payment_provider === 'PAYFAST' && 'Enter your PayFast Merchant Key, Merchant ID, and Passphrase from your PayFast settings.'}
+                  {form.payment_provider === 'STITCH' && 'Enter your Stitch Client Secret and Client ID from your Stitch dashboard. Also fill in your bank details in the EFT section below.'}
+                </p>
+
+                <div className="space-y-2">
+                  <Label>
+                    {form.payment_provider === 'YOCO' && 'Secret Key (sk_live_...)'}
+                    {form.payment_provider === 'PAYFAST' && 'Merchant Key'}
+                    {form.payment_provider === 'STITCH' && 'Client Secret'}
+                  </Label>
+                  <Input
+                    type="password"
+                    value={form.payment_api_key}
+                    onChange={e => updateField('payment_api_key', e.target.value)}
+                    placeholder={settings?.payment_api_key_hint ?? 'Enter new value to update…'}
+                    autoComplete="off"
+                  />
+                  {settings?.payment_api_key_hint && !form.payment_api_key && (
+                    <p className="text-xs text-muted-foreground">Currently configured: {settings.payment_api_key_hint}</p>
+                  )}
+                </div>
+
+                {(form.payment_provider === 'PAYFAST' || form.payment_provider === 'STITCH') && (
+                  <div className="space-y-2">
+                    <Label>
+                      {form.payment_provider === 'PAYFAST' && 'Merchant ID'}
+                      {form.payment_provider === 'STITCH' && 'Client ID'}
+                    </Label>
+                    <Input
+                      type="password"
+                      value={form.payment_api_secret}
+                      onChange={e => updateField('payment_api_secret', e.target.value)}
+                      placeholder={settings?.payment_api_secret_hint ?? 'Enter new value to update…'}
+                      autoComplete="off"
+                    />
+                    {settings?.payment_api_secret_hint && !form.payment_api_secret && (
+                      <p className="text-xs text-muted-foreground">Currently configured: {settings.payment_api_secret_hint}</p>
+                    )}
+                  </div>
+                )}
+
+                {(form.payment_provider === 'YOCO' || form.payment_provider === 'PAYFAST') && (
+                  <div className="space-y-2">
+                    <Label>
+                      {form.payment_provider === 'YOCO' && 'Webhook Secret'}
+                      {form.payment_provider === 'PAYFAST' && 'Passphrase'}
+                    </Label>
+                    <Input
+                      type="password"
+                      value={form.payment_webhook_secret}
+                      onChange={e => updateField('payment_webhook_secret', e.target.value)}
+                      placeholder={settings?.payment_webhook_secret_configured ? 'Configured — enter new value to replace' : 'Enter webhook secret…'}
+                      autoComplete="off"
+                    />
+                  </div>
+                )}
+
+                {form.payment_provider && form.payment_provider !== 'MOCK' && settings?.id && (
+                  <div className="rounded-md bg-muted p-3 text-xs space-y-1">
+                    <p className="font-medium text-foreground">Your Webhook URL</p>
+                    <p className="text-muted-foreground">Paste this into your {form.payment_provider} dashboard under Webhooks:</p>
+                    <code className="block break-all text-foreground">
+                      {`https://nextgen-api.onrender.com/v1/payments/webhooks/${form.payment_provider.toLowerCase()}/${settings.id}`}
+                    </code>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

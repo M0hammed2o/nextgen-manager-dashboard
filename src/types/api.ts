@@ -270,6 +270,10 @@ export interface BusinessSettings {
   eft_account_number: string | null;
   eft_branch_code: string | null;
   eft_reference_prefix: string | null;
+  // Provider credentials — hints only, never raw values
+  payment_api_key_hint: string | null;
+  payment_api_secret_hint: string | null;
+  payment_webhook_secret_configured: boolean;
 }
 
 // Assets
