@@ -51,9 +51,10 @@ const PAYMENT_METHODS = [
 const PAYMENT_PROVIDERS = [
   { value: 'DIRECT_EFT', label: 'Direct EFT (no API)' },
   { value: 'MOCK', label: 'Mock (testing only)' },
-  { value: 'YOCO', label: 'Yoco (coming soon)' },
-  { value: 'PAYFAST', label: 'PayFast (coming soon)' },
-  { value: 'STITCH', label: 'Stitch (coming soon)' },
+  { value: 'IKHOKA', label: 'iKhoka (card, Apple Pay, Google Pay, EFT)' },
+  { value: 'YOCO', label: 'Yoco (card, Apple Pay, Google Pay)' },
+  { value: 'PAYFAST', label: 'PayFast (card, EFT, SnapScan)' },
+  { value: 'STITCH', label: 'Stitch (instant EFT)' },
 ];
 
 const EMPTY_FORM: EditableSettings = {
@@ -413,6 +414,7 @@ export default function SettingsPage() {
               <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
                 <p className="text-xs font-medium text-foreground">Provider Credentials</p>
                 <p className="text-xs text-muted-foreground">
+                  {form.payment_provider === 'IKHOKA' && 'Enter your iKhoka Application ID and Application Secret from iK Dashboard → Integrations → Payment API.'}
                   {form.payment_provider === 'YOCO' && 'Enter your Yoco Secret Key and Webhook Secret from your Yoco dashboard.'}
                   {form.payment_provider === 'PAYFAST' && 'Enter your PayFast Merchant Key, Merchant ID, and Passphrase from your PayFast settings.'}
                   {form.payment_provider === 'STITCH' && 'Enter your Stitch Client Secret and Client ID from your Stitch dashboard. Also fill in your bank details in the EFT section below.'}
@@ -420,6 +422,7 @@ export default function SettingsPage() {
 
                 <div className="space-y-2">
                   <Label>
+                    {form.payment_provider === 'IKHOKA' && 'Application ID'}
                     {form.payment_provider === 'YOCO' && 'Secret Key (sk_live_...)'}
                     {form.payment_provider === 'PAYFAST' && 'Merchant Key'}
                     {form.payment_provider === 'STITCH' && 'Client Secret'}
@@ -436,9 +439,10 @@ export default function SettingsPage() {
                   )}
                 </div>
 
-                {(form.payment_provider === 'PAYFAST' || form.payment_provider === 'STITCH') && (
+                {(form.payment_provider === 'IKHOKA' || form.payment_provider === 'PAYFAST' || form.payment_provider === 'STITCH') && (
                   <div className="space-y-2">
                     <Label>
+                      {form.payment_provider === 'IKHOKA' && 'Application Secret'}
                       {form.payment_provider === 'PAYFAST' && 'Merchant ID'}
                       {form.payment_provider === 'STITCH' && 'Client ID'}
                     </Label>
@@ -473,8 +477,14 @@ export default function SettingsPage() {
 
                 {form.payment_provider && form.payment_provider !== 'MOCK' && settings?.id && (
                   <div className="rounded-md bg-muted p-3 text-xs space-y-1">
-                    <p className="font-medium text-foreground">Your Webhook URL</p>
-                    <p className="text-muted-foreground">Paste this into your {form.payment_provider} dashboard under Webhooks:</p>
+                    <p className="font-medium text-foreground">
+                      {form.payment_provider === 'IKHOKA' ? 'Callback URL (auto-configured)' : 'Your Webhook URL'}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {form.payment_provider === 'IKHOKA'
+                        ? 'This URL is automatically sent with every payment link — no dashboard configuration needed:'
+                        : `Paste this into your ${form.payment_provider} dashboard under Webhooks:`}
+                    </p>
                     <code className="block break-all text-foreground">
                       {`https://nextgen-api.onrender.com/v1/payments/webhooks/${form.payment_provider.toLowerCase()}/${settings.id}`}
                     </code>
