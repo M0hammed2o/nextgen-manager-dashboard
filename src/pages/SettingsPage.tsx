@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import type { BusinessSettings } from '@/types/api';
+import type { BusinessSettings, UploadUrlResponse } from '@/types/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -99,6 +99,7 @@ export default function SettingsPage() {
   });
 
   const [form, setForm] = useState<EditableSettings>(EMPTY_FORM);
+  const [isUploadingMenuImage, setIsUploadingMenuImage] = useState(false);
 
   useEffect(() => {
     if (settings) {
@@ -156,6 +157,51 @@ export default function SettingsPage() {
     const existing = hours[dayKey];
     hours[dayKey] = { open: '', close: '', ...(existing ?? {}), [field]: value };
     updateField('business_hours', hours);
+  };
+
+  const MENU_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+  const MENU_IMAGE_MAX_MB = 5;
+
+  const handleMenuImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file again later
+    if (!file) return;
+
+    if (!MENU_IMAGE_TYPES.includes(file.type)) {
+      toast({
+        title: 'Unsupported file type',
+        description: 'Please choose a PNG, JPEG, WebP or GIF image.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (file.size > MENU_IMAGE_MAX_MB * 1024 * 1024) {
+      toast({
+        title: 'File too large',
+        description: `Please choose an image under ${MENU_IMAGE_MAX_MB}MB.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsUploadingMenuImage(true);
+    try {
+      const { upload_url, public_url } = await apiClient.post<UploadUrlResponse>(
+        '/v1/business/assets/upload-url',
+        { kind: 'BUSINESS_MENU_IMAGE', content_type: file.type },
+      );
+      await apiClient.uploadFile(upload_url, file);
+      updateField('menu_image_url', public_url);
+      toast({ title: 'Image uploaded', description: 'Click Save below to apply it.' });
+    } catch (err) {
+      toast({
+        title: 'Upload failed',
+        description: err instanceof Error ? err.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUploadingMenuImage(false);
+    }
   };
 
   return (
@@ -295,18 +341,30 @@ export default function SettingsPage() {
       {/* Media */}
       <section className="bg-card border border-border rounded-xl p-6 space-y-4">
         <h3 className="font-semibold text-foreground">Media</h3>
-        <p className="text-sm text-muted-foreground">Images sent automatically when customers ask for your menu or specials.</p>
+        <p className="text-sm text-muted-foreground">Sent automatically when a customer requests your menu via WhatsApp.</p>
         <div className="space-y-2">
-          <Label>Menu Image URL</Label>
-          <Input
-            value={form.menu_image_url ?? ''}
-            onChange={e => updateField('menu_image_url', e.target.value || null)}
-            placeholder="https://example.com/menu.jpg"
+          <Label>Menu Image</Label>
+          <input
+            type="file"
+            accept={MENU_IMAGE_TYPES.join(',')}
+            onChange={handleMenuImageSelect}
+            disabled={isUploadingMenuImage}
+            className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-foreground file:cursor-pointer hover:file:bg-primary/90 disabled:opacity-60"
           />
-          <p className="text-xs text-muted-foreground">Paste a public image URL. This image is sent when a customer requests the menu via WhatsApp.</p>
+          {isUploadingMenuImage && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <Loader2 className="w-3 h-3 animate-spin" /> Uploading…
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">PNG, JPEG, WebP or GIF — up to {MENU_IMAGE_MAX_MB}MB.</p>
         </div>
         {form.menu_image_url && (
-          <img src={form.menu_image_url} alt="Menu preview" className="rounded-lg max-h-48 object-contain border border-border" />
+          <div className="space-y-2">
+            <img src={form.menu_image_url} alt="Menu preview" className="rounded-lg max-h-48 object-contain border border-border" />
+            <Button type="button" variant="outline" size="sm" onClick={() => updateField('menu_image_url', null)}>
+              Remove Image
+            </Button>
+          </div>
         )}
       </section>
 

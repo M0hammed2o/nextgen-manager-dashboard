@@ -327,7 +327,9 @@ export interface WhatsAppStatus {
 // Assets
 export interface UploadUrlResponse {
   upload_url: string;
+  storage_path: string;
   asset_id: string;
+  public_url: string;
 }
 
 export interface SignedUrlResponse {
