@@ -770,10 +770,7 @@ function OptionGroupsEditor({ groups, onChange }: {
             <Input
               placeholder="Group name (e.g. Size)"
               value={group.name}
-              onChange={e => updateGroup(gi, {
-                name: e.target.value,
-                id: uniqueSlug(e.target.value || 'option-group', groups.filter((_, i) => i !== gi).map(g => g.id)),
-              })}
+              onChange={e => updateGroup(gi, { name: e.target.value })}
               className="flex-1"
             />
             <Button
@@ -813,10 +810,7 @@ function OptionGroupsEditor({ groups, onChange }: {
                 <Input
                   placeholder="Option name (e.g. MKhulu)"
                   value={opt.name}
-                  onChange={e => updateOption(gi, oi, {
-                    name: e.target.value,
-                    id: uniqueSlug(e.target.value || 'option', group.options.filter((_, i) => i !== oi).map(o => o.id)),
-                  })}
+                  onChange={e => updateOption(gi, oi, { name: e.target.value })}
                   className="flex-1"
                 />
                 <div className="relative w-32 shrink-0">
