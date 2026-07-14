@@ -230,6 +230,9 @@ export interface StaffMember {
   is_active: boolean;
   last_login_at: string | null;
   created_at: string;
+  // Present only in the response right after creation, when no pin was
+  // supplied — shown once, never returned by GET/PUT.
+  initial_pin?: string | null;
 }
 
 export interface CreateStaffRequest {

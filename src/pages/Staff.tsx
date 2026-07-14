@@ -100,7 +100,11 @@ export default function StaffPage() {
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{editing ? 'Edit Staff' : 'Add Staff'}</DialogTitle></DialogHeader>
-          <StaffForm member={editing} onClose={() => setShowModal(false)} />
+          <StaffForm
+            member={editing}
+            onClose={() => setShowModal(false)}
+            onCreatedWithPin={(pin) => setRotatedPin(pin)}
+          />
         </DialogContent>
       </Dialog>
 
@@ -186,7 +190,11 @@ function StaffTable({ members, onEdit, onDelete, onRotatePin }: {
   );
 }
 
-function StaffForm({ member, onClose }: { member: StaffMember | null; onClose: () => void }) {
+function StaffForm({ member, onClose, onCreatedWithPin }: {
+  member: StaffMember | null;
+  onClose: () => void;
+  onCreatedWithPin: (pin: string) => void;
+}) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [name, setName] = useState(member?.staff_name ?? '');
@@ -198,10 +206,15 @@ function StaffForm({ member, onClose }: { member: StaffMember | null; onClose: (
 
   const mutation = useMutation({
     mutationFn: (data: CreateStaffRequest & { is_active?: boolean }) =>
-      member ? apiClient.put(`/v1/business/staff/${member.id}`, data) : apiClient.post('/v1/business/staff', data),
-    onSuccess: () => {
+      member
+        ? apiClient.put<StaffMember>(`/v1/business/staff/${member.id}`, data)
+        : apiClient.post<StaffMember>('/v1/business/staff', data),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['staff'] });
       toast({ title: member ? 'Staff updated' : 'Staff created' });
+      if (!member && result.initial_pin) {
+        onCreatedWithPin(result.initial_pin);
+      }
       onClose();
     },
     onError: (err: Error) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
@@ -243,7 +256,17 @@ function StaffForm({ member, onClose }: { member: StaffMember | null; onClose: (
         </>
       )}
       {role === 'STAFF' && !member && (
-        <div className="space-y-2"><Label>Initial PIN (optional)</Label><Input value={pin} onChange={e => setPin(e.target.value)} placeholder="Auto-generated if empty" /></div>
+        <div className="space-y-2">
+          <Label>Initial PIN (optional)</Label>
+          <Input
+            value={pin}
+            onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            placeholder="Auto-generated if empty"
+            inputMode="numeric"
+            maxLength={4}
+          />
+          <p className="text-xs text-muted-foreground">Exactly 4 digits — matches the staff till's keypad.</p>
+        </div>
       )}
       <div className="flex items-center gap-2"><Switch checked={isActive} onCheckedChange={setIsActive} /><Label>Active</Label></div>
       <div className="flex justify-end gap-2">
