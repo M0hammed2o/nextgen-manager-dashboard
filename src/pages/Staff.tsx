@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth';
 import type { StaffMember, CreateStaffRequest } from '@/types/api';
 import { formatDate } from '@/lib/mappers';
 import { Button } from '@/components/ui/button';
@@ -17,16 +18,19 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select';
-import { Users, Plus, Edit, Trash2, KeyRound, Copy, Loader2 } from 'lucide-react';
+import { Users, Plus, Edit, Trash2, UserX, KeyRound, Copy, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function StaffPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isOwner = user?.role === 'OWNER';
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<StaffMember | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<StaffMember | null>(null);
+  const [purgeTarget, setPurgeTarget] = useState<StaffMember | null>(null);
   const [rotatedPin, setRotatedPin] = useState<string | null>(null);
 
   const { data: staff = [], isLoading } = useQuery({
@@ -40,6 +44,19 @@ export default function StaffPage() {
       queryClient.invalidateQueries({ queryKey: ['staff'] });
       toast({ title: 'Staff member removed' });
       setDeleteTarget(null);
+    },
+  });
+
+  const purgeMutation = useMutation({
+    mutationFn: (id: string) => apiClient.delete(`/v1/business/staff/${id}/permanent`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['staff'] });
+      toast({ title: 'Staff member permanently deleted' });
+      setPurgeTarget(null);
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      setPurgeTarget(null);
     },
   });
 
@@ -82,7 +99,14 @@ export default function StaffPage() {
             <div>
               <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Managers & Owners</h3>
               <div className="bg-card border border-border rounded-xl overflow-hidden">
-                <StaffTable members={managers} onEdit={(m) => { setEditing(m); setShowModal(true); }} onDelete={setDeleteTarget} onRotatePin={(m) => rotatePinMutation.mutate(m.id)} />
+                <StaffTable
+                  members={managers}
+                  isOwner={isOwner}
+                  onEdit={(m) => { setEditing(m); setShowModal(true); }}
+                  onDelete={setDeleteTarget}
+                  onPurge={setPurgeTarget}
+                  onRotatePin={(m) => rotatePinMutation.mutate(m.id)}
+                />
               </div>
             </div>
           )}
@@ -90,7 +114,14 @@ export default function StaffPage() {
             <div>
               <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Staff</h3>
               <div className="bg-card border border-border rounded-xl overflow-hidden">
-                <StaffTable members={staffMembers} onEdit={(m) => { setEditing(m); setShowModal(true); }} onDelete={setDeleteTarget} onRotatePin={(m) => rotatePinMutation.mutate(m.id)} />
+                <StaffTable
+                  members={staffMembers}
+                  isOwner={isOwner}
+                  onEdit={(m) => { setEditing(m); setShowModal(true); }}
+                  onDelete={setDeleteTarget}
+                  onPurge={setPurgeTarget}
+                  onRotatePin={(m) => rotatePinMutation.mutate(m.id)}
+                />
               </div>
             </div>
           )}
@@ -112,11 +143,34 @@ export default function StaffPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remove {deleteTarget?.staff_name}?</AlertDialogTitle>
-            <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+            <AlertDialogDescription>
+              They'll be deactivated and signed out immediately. You can reactivate them later from Edit,
+              or permanently delete their record once they're inactive.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}>Remove</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!purgeTarget} onOpenChange={() => setPurgeTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently delete {purgeTarget?.staff_name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This cannot be undone — their record will be completely removed, not just deactivated.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => purgeTarget && purgeMutation.mutate(purgeTarget.id)}
+            >
+              Delete Permanently
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -137,10 +191,12 @@ export default function StaffPage() {
   );
 }
 
-function StaffTable({ members, onEdit, onDelete, onRotatePin }: {
+function StaffTable({ members, isOwner, onEdit, onDelete, onPurge, onRotatePin }: {
   members: StaffMember[];
+  isOwner: boolean;
   onEdit: (m: StaffMember) => void;
   onDelete: (m: StaffMember) => void;
+  onPurge: (m: StaffMember) => void;
   onRotatePin: (m: StaffMember) => void;
 }) {
   return (
@@ -177,8 +233,19 @@ function StaffTable({ members, onEdit, onDelete, onRotatePin }: {
                     </Button>
                   )}
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(m)}><Edit className="w-3.5 h-3.5" /></Button>
+                  {m.role !== 'OWNER' && !m.is_active && isOwner && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive"
+                      title="Permanently delete"
+                      onClick={() => onPurge(m)}
+                    >
+                      <UserX className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
                   {m.role !== 'OWNER' && (
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onDelete(m)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Remove (deactivate)" onClick={() => onDelete(m)}><Trash2 className="w-3.5 h-3.5" /></Button>
                   )}
                 </div>
               </td>
