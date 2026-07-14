@@ -2,6 +2,7 @@ import { Outlet, Navigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
+import { WhatsAppPauseBanner } from './WhatsAppPauseBanner';
 import { Loader2 } from 'lucide-react';
 
 export function DashboardLayout() {
@@ -24,6 +25,7 @@ export function DashboardLayout() {
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar />
+        <WhatsAppPauseBanner />
         <main className="flex-1 overflow-auto p-4 md:p-6">
           <Outlet />
         </main>

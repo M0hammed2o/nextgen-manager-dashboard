@@ -1,5 +1,22 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.nextgenintelligence.co.za';
 
+/**
+ * Thrown by ApiClient.request() on a non-2xx response. Preserves the
+ * backend's error `code` (e.g. "PASSWORD_CHANGE_REQUIRED") so callers can
+ * branch on it instead of matching on message text.
+ */
+export class ApiError extends Error {
+  code?: string;
+  status: number;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -73,7 +90,7 @@ class ApiClient {
       // Backend returns { error: { code, message, details } } — parse nested format
       const msg = body?.error?.message || body?.detail || body?.message || `Request failed (${res.status})`;
       console.error(`API ${res.status}:`, body?.error || body);
-      throw new Error(msg);
+      throw new ApiError(msg, res.status, body?.error?.code);
     }
 
     if (res.status === 204) return undefined as T;

@@ -27,7 +27,7 @@ const DAYS = [
 // Read-only server fields (id, slug, plan limits, etc.) are not tracked locally.
 type EditableSettings = Pick<BusinessSettings,
   | 'name' | 'timezone' | 'business_hours'
-  | 'greeting_text' | 'fallback_text' | 'closed_text'
+  | 'greeting_text' | 'fallback_text' | 'closed_text' | 'busy_text'
   | 'order_in_only' | 'delivery_enabled' | 'delivery_fee_cents'
   | 'require_customer_name' | 'require_phone_number' | 'require_delivery_address'
   | 'address' | 'phone' | 'menu_image_url'
@@ -64,6 +64,7 @@ const EMPTY_FORM: EditableSettings = {
   greeting_text: '',
   fallback_text: '',
   closed_text: '',
+  busy_text: '',
   order_in_only: false,
   delivery_enabled: false,
   delivery_fee_cents: 0,
@@ -108,6 +109,7 @@ export default function SettingsPage() {
         greeting_text: settings.greeting_text ?? '',
         fallback_text: settings.fallback_text ?? '',
         closed_text: settings.closed_text ?? '',
+        busy_text: settings.busy_text ?? '',
         order_in_only: settings.order_in_only ?? false,
         delivery_enabled: settings.delivery_enabled ?? false,
         delivery_fee_cents: settings.delivery_fee_cents ?? 0,
@@ -171,6 +173,7 @@ export default function SettingsPage() {
             greeting_text: form.greeting_text || null,
             fallback_text: form.fallback_text || null,
             closed_text: form.closed_text || null,
+            busy_text: form.busy_text || null,
             order_in_only: form.order_in_only,
             delivery_enabled: form.delivery_enabled,
             delivery_fee_cents: form.delivery_fee_cents,
@@ -274,6 +277,17 @@ export default function SettingsPage() {
           <div className="space-y-2">
             <Label>Closed Text</Label>
             <Textarea value={form.closed_text ?? ''} onChange={e => updateField('closed_text', e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Busy Text</Label>
+            <Textarea
+              value={form.busy_text ?? ''}
+              onChange={e => updateField('busy_text', e.target.value)}
+              placeholder="e.g. We're currently too busy to attend WhatsApp orders. Please place your order in store."
+            />
+            <p className="text-xs text-muted-foreground">
+              Shown to customers while a staff member has paused WhatsApp ordering from the till.
+            </p>
           </div>
         </div>
       </section>

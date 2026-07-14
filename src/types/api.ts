@@ -8,6 +8,12 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface SetPasswordRequest {
+  email: string;
+  current_password: string;
+  new_password: string;
+}
+
 export interface AuthTokens {
   access_token: string;
   refresh_token: string;
@@ -245,6 +251,7 @@ export interface BusinessSettings {
   greeting_text: string | null;
   fallback_text: string | null;
   closed_text: string | null;
+  busy_text: string | null;
   order_in_only: boolean;
   delivery_enabled: boolean;
   delivery_fee_cents: number;
@@ -274,6 +281,14 @@ export interface BusinessSettings {
   payment_api_key_hint: string | null;
   payment_api_secret_hint: string | null;
   payment_webhook_secret_configured: boolean;
+}
+
+// WhatsApp pause/busy toggle
+export interface WhatsAppStatus {
+  paused: boolean;
+  paused_at: string | null;
+  paused_by_name: string | null;
+  busy_text: string | null;
 }
 
 // Assets

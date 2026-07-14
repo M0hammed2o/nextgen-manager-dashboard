@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { AuthUser, LoginRequest, LoginResponse } from '@/types/api';
+import type { AuthUser, LoginRequest, LoginResponse, SetPasswordRequest } from '@/types/api';
 import { apiClient } from './api-client';
 
 interface AuthContextType {
@@ -7,6 +7,7 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (req: LoginRequest) => Promise<void>;
+  setNewPassword: (req: SetPasswordRequest) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -47,6 +48,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(res.user);
   }, []);
 
+  const setNewPassword = useCallback(async (req: SetPasswordRequest) => {
+    // Same response shape as /auth/login — auto-logs-in on success.
+    const res = await apiClient.post<LoginResponse>('/v1/auth/set-password', req);
+    localStorage.setItem('access_token', res.tokens.access_token);
+    localStorage.setItem('refresh_token', res.tokens.refresh_token);
+    localStorage.setItem('auth_user', JSON.stringify(res.user));
+    setUser(res.user);
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       const rt = localStorage.getItem('refresh_token');
@@ -57,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, setNewPassword, logout }}>
       {children}
     </AuthContext.Provider>
   );
