@@ -182,6 +182,33 @@ export interface MenuAddOn {
   sort_order: number;
 }
 
+// Option groups (e.g. "Size") — mirrors backend OptionGroupSchema/OptionChoiceSchema
+// in backend/app/api/v1/routes_menu.py exactly. price_delta_cents is signed:
+// negative = cheaper than the item's base price, positive = more expensive.
+export interface MenuOptionChoice {
+  id: string;
+  name: string;
+  price_delta_cents: number;
+  sort_order: number;
+  is_enabled: boolean;
+}
+
+export interface MenuOptionGroup {
+  id: string;
+  name: string;
+  required: boolean;
+  min_selections: number;
+  max_selections: number;
+  sort_order: number;
+  is_enabled: boolean;
+  default_option_id: string | null;
+  options: MenuOptionChoice[];
+}
+
+export interface MenuItemOptions {
+  option_groups: MenuOptionGroup[];
+}
+
 export interface MenuItem {
   id: string;
   category_id: string | null;
@@ -189,7 +216,7 @@ export interface MenuItem {
   description: string | null;
   price_cents: number;
   currency: string;
-  options_json: Record<string, unknown> | null;
+  options_json: MenuItemOptions | null;
   add_ons: MenuAddOn[];
   is_active: boolean;
   sort_order: number;
@@ -203,7 +230,10 @@ export interface CreateMenuItemRequest {
   price_cents: number;
   sort_order?: number;
   image_asset_id?: string;
-  options_json?: Record<string, unknown>;
+  // null (not omitted) is required to actually CLEAR existing options on an
+  // update — the backend does a partial update via exclude_unset, so an
+  // omitted key leaves the stored value untouched.
+  options_json?: MenuItemOptions | null;
 }
 
 // Specials — matches backend SpecialResponse

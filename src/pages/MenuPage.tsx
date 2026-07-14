@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import type { MenuAddOn, MenuCategory, MenuItem, CreateMenuItemRequest } from '@/types/api';
+import type {
+  MenuAddOn, MenuCategory, MenuItem, CreateMenuItemRequest, MenuOptionGroup, MenuOptionChoice,
+} from '@/types/api';
 import { formatCents } from '@/lib/mappers';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +29,22 @@ import { useToast } from '@/hooks/use-toast';
 
 function parsePriceInput(val: string): number {
   return Math.round(parseFloat(val || '0') * 100);
+}
+
+// ── Option group id generation ────────────────────────────────────────────────
+// Groups/options need a stable string id (backend requires non-empty, unique
+// within their scope) — generated from the name so the manager never types one.
+
+function slugify(text: string): string {
+  return text.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'option';
+}
+
+function uniqueSlug(base: string, existingIds: string[]): string {
+  const root = slugify(base);
+  if (!existingIds.includes(root)) return root;
+  let n = 2;
+  while (existingIds.includes(`${root}-${n}`)) n += 1;
+  return `${root}-${n}`;
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
@@ -683,6 +701,154 @@ function CategoryEditForm({ category, onClose }: { category: MenuCategory; onClo
   );
 }
 
+// ── Option groups editor (e.g. "Size": Medium / Regular / MKhulu) ─────────────
+// price_delta_cents is signed vs. the item's base price — negative for a
+// smaller/cheaper option, positive for larger/pricier. Backend validates the
+// full shape again on save (OptionGroupSchema in routes_menu.py); this editor
+// only needs to produce a well-formed payload, not be the source of truth.
+
+function OptionGroupsEditor({ groups, onChange }: {
+  groups: MenuOptionGroup[];
+  onChange: (groups: MenuOptionGroup[]) => void;
+}) {
+  const addGroup = () => {
+    const id = uniqueSlug('option-group', groups.map(g => g.id));
+    onChange([...groups, {
+      id, name: '', required: true, min_selections: 1, max_selections: 1,
+      sort_order: groups.length, is_enabled: true, default_option_id: null, options: [],
+    }]);
+  };
+
+  const updateGroup = (index: number, patch: Partial<MenuOptionGroup>) => {
+    const next = [...groups];
+    next[index] = { ...next[index], ...patch };
+    onChange(next);
+  };
+
+  const removeGroup = (index: number) => onChange(groups.filter((_, i) => i !== index));
+
+  const addOption = (groupIndex: number) => {
+    const group = groups[groupIndex];
+    const id = uniqueSlug('option', group.options.map(o => o.id));
+    updateGroup(groupIndex, {
+      options: [...group.options, {
+        id, name: '', price_delta_cents: 0, sort_order: group.options.length, is_enabled: true,
+      }],
+    });
+  };
+
+  const updateOption = (groupIndex: number, optionIndex: number, patch: Partial<MenuOptionChoice>) => {
+    const group = groups[groupIndex];
+    const nextOptions = [...group.options];
+    nextOptions[optionIndex] = { ...nextOptions[optionIndex], ...patch };
+    updateGroup(groupIndex, { options: nextOptions });
+  };
+
+  const removeOption = (groupIndex: number, optionIndex: number) => {
+    const group = groups[groupIndex];
+    updateGroup(groupIndex, { options: group.options.filter((_, i) => i !== optionIndex) });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <Label>Options (e.g. Size)</Label>
+        <Button type="button" variant="outline" size="sm" onClick={addGroup} className="gap-1.5">
+          <Plus className="w-3.5 h-3.5" /> Add Option Group
+        </Button>
+      </div>
+
+      {groups.length === 0 && (
+        <p className="text-xs text-muted-foreground">
+          No option groups yet — add one for choices like drink size.
+        </p>
+      )}
+
+      {groups.map((group, gi) => (
+        <div key={group.id} className="rounded-lg border border-border p-3 space-y-3">
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Group name (e.g. Size)"
+              value={group.name}
+              onChange={e => updateGroup(gi, {
+                name: e.target.value,
+                id: uniqueSlug(e.target.value || 'option-group', groups.filter((_, i) => i !== gi).map(g => g.id)),
+              })}
+              className="flex-1"
+            />
+            <Button
+              type="button" variant="ghost" size="icon"
+              className="h-8 w-8 text-destructive shrink-0"
+              onClick={() => removeGroup(gi)}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={group.required}
+                onCheckedChange={(checked) => updateGroup(gi, {
+                  required: checked,
+                  min_selections: checked ? Math.max(1, group.min_selections) : 0,
+                })}
+              />
+              <Label className="text-sm font-normal">Required</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={group.max_selections > 1}
+                onCheckedChange={(checked) => updateGroup(gi, {
+                  max_selections: checked === true ? Math.max(2, group.options.length) : 1,
+                })}
+              />
+              <Label className="text-sm font-normal">Allow choosing more than one</Label>
+            </div>
+          </div>
+
+          <div className="space-y-2 pl-1">
+            {group.options.map((opt, oi) => (
+              <div key={opt.id} className="flex items-center gap-2">
+                <Input
+                  placeholder="Option name (e.g. MKhulu)"
+                  value={opt.name}
+                  onChange={e => updateOption(gi, oi, {
+                    name: e.target.value,
+                    id: uniqueSlug(e.target.value || 'option', group.options.filter((_, i) => i !== oi).map(o => o.id)),
+                  })}
+                  className="flex-1"
+                />
+                <div className="relative w-32 shrink-0">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">R</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={opt.price_delta_cents / 100}
+                    onChange={e => updateOption(gi, oi, { price_delta_cents: parsePriceInput(e.target.value) })}
+                    className="pl-6"
+                    title="Price change vs. base price — negative for cheaper, positive for more expensive"
+                  />
+                </div>
+                <Button
+                  type="button" variant="ghost" size="icon"
+                  className="h-8 w-8 text-destructive shrink-0"
+                  onClick={() => removeOption(gi, oi)}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            ))}
+            <Button type="button" variant="outline" size="sm" onClick={() => addOption(gi)} className="gap-1.5">
+              <Plus className="w-3.5 h-3.5" /> Add Option
+            </Button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function MenuItemForm({
   item,
   categories,
@@ -699,6 +865,9 @@ function MenuItemForm({
   const [priceCents, setPriceCents] = useState(String((item?.price_cents ?? 0) / 100));
   const [categoryId, setCategoryId] = useState(item?.category_id ?? '');
   const [isAvailable, setIsAvailable] = useState(item?.is_active ?? true);
+  const [optionGroups, setOptionGroups] = useState<MenuOptionGroup[]>(
+    item?.options_json?.option_groups ?? []
+  );
 
   const mutation = useMutation({
     mutationFn: (data: CreateMenuItemRequest) =>
@@ -715,11 +884,31 @@ function MenuItemForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    for (const group of optionGroups) {
+      if (!group.name.trim()) {
+        toast({ title: 'Error', description: 'Every option group needs a name.', variant: 'destructive' });
+        return;
+      }
+      if (group.options.length === 0) {
+        toast({ title: 'Error', description: `"${group.name}" needs at least one option.`, variant: 'destructive' });
+        return;
+      }
+      if (group.options.some(o => !o.name.trim())) {
+        toast({ title: 'Error', description: `Every option in "${group.name}" needs a name.`, variant: 'destructive' });
+        return;
+      }
+    }
+
     const payload: Record<string, unknown> = {
       name,
       description: description || undefined,
       price_cents: parsePriceInput(priceCents),
       category_id: categoryId || undefined,
+      // null (not omitted) so clearing all groups actually clears the stored
+      // value — the backend applies partial updates via exclude_unset, so an
+      // omitted key here would leave a previously-saved options_json intact.
+      options_json: optionGroups.length > 0 ? { option_groups: optionGroups } : null,
     };
     if (item) payload.is_active = isAvailable;
     mutation.mutate(payload as CreateMenuItemRequest);
@@ -759,6 +948,7 @@ function MenuItemForm({
           />
         </div>
       </div>
+      <OptionGroupsEditor groups={optionGroups} onChange={setOptionGroups} />
       {item && (
         <div className="flex items-center gap-2">
           <Switch checked={isAvailable} onCheckedChange={setIsAvailable} />
