@@ -17,6 +17,10 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger
 } from '@/components/ui/dialog';
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select';
 import {
@@ -115,12 +119,18 @@ function ItemsTab({ categories, items }: { categories: MenuCategory[]; items: Me
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<MenuCategory | null>(null);
   const [showEditCategoryModal, setShowEditCategoryModal] = useState(false);
+  const [deleteItemTarget, setDeleteItemTarget] = useState<MenuItem | null>(null);
 
   const deleteItemMutation = useMutation({
     mutationFn: (id: string) => apiClient.delete(`/v1/business/menu/items/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['menu-items'] });
       toast({ title: 'Item deleted' });
+      setDeleteItemTarget(null);
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Could not delete item', description: err.message, variant: 'destructive' });
+      setDeleteItemTarget(null);
     },
   });
 
@@ -248,7 +258,7 @@ function ItemsTab({ categories, items }: { categories: MenuCategory[]; items: Me
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditingItem(item); setShowItemModal(true); }}>
                       <Edit className="w-3.5 h-3.5" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteItemMutation.mutate(item.id)}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteItemTarget(item)}>
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </div>
@@ -265,6 +275,23 @@ function ItemsTab({ categories, items }: { categories: MenuCategory[]; items: Me
           <MenuItemForm item={editingItem} categories={categories} onClose={() => setShowItemModal(false)} />
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteItemTarget} onOpenChange={(open) => !open && setDeleteItemTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {deleteItemTarget?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the item from your menu. Existing orders that reference it are unaffected. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteItemTarget && deleteItemMutation.mutate(deleteItemTarget.id)}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={showEditCategoryModal} onOpenChange={open => { setShowEditCategoryModal(open); if (!open) setEditingCategory(null); }}>
         <DialogContent>

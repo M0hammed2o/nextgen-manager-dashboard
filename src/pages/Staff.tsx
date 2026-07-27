@@ -45,6 +45,10 @@ export default function StaffPage() {
       toast({ title: 'Staff member removed' });
       setDeleteTarget(null);
     },
+    onError: (err: Error) => {
+      toast({ title: 'Could not remove staff member', description: err.message, variant: 'destructive' });
+      setDeleteTarget(null);
+    },
   });
 
   const purgeMutation = useMutation({
@@ -66,6 +70,9 @@ export default function StaffPage() {
       queryClient.invalidateQueries({ queryKey: ['staff'] });
       setRotatedPin(data.pin);
       toast({ title: 'PIN rotated' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Could not rotate PIN', description: err.message, variant: 'destructive' });
     },
   });
 
@@ -263,6 +270,15 @@ function StaffForm({ member, onClose, onCreatedWithPin }: {
   onCreatedWithPin: (pin: string) => void;
 }) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  // The backend correctly rejects a non-owner creating a MANAGER (only
+  // OWNER can create MANAGER -- backend/app/api/v1/routes_staff.py), but
+  // this form showed the "Manager" option to everyone regardless, letting a
+  // Manager pick it and only find out it's not allowed after submitting.
+  // Found while browser-testing role-based access as a Manager. Hiding the
+  // option outright is simpler and clearer than a disabled-with-tooltip
+  // state for a two-item select.
+  const isOwner = user?.role === 'OWNER';
   const queryClient = useQueryClient();
   const [name, setName] = useState(member?.staff_name ?? '');
   const [email, setEmail] = useState(member?.email ?? '');
@@ -312,7 +328,13 @@ function StaffForm({ member, onClose, onCreatedWithPin }: {
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="STAFF">Staff (PIN login)</SelectItem>
-            <SelectItem value="MANAGER">Manager (Email login)</SelectItem>
+            {/* Always show it when editing an existing manager (so the
+                select never ends up with a selected value that has no
+                matching visible option) -- only hide it for a non-owner
+                creating a brand-new account. */}
+            {(isOwner || member?.role === 'MANAGER') && (
+              <SelectItem value="MANAGER">Manager (Email login)</SelectItem>
+            )}
           </SelectContent>
         </Select>
       </div>

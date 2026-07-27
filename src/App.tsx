@@ -14,6 +14,8 @@ import SpecialsPage from "./pages/Specials";
 import StaffPage from "./pages/Staff";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import SettingsPage from "./pages/SettingsPage";
+import BillingPage from "./pages/BillingPage";
+import TillPage from "./pages/TillPage";
 import ExportsPage from "./pages/ExportsPage";
 import NotFound from "./pages/NotFound";
 
@@ -44,6 +46,8 @@ const App = () => (
                 <Route path="/staff" element={<StaffPage />} />
                 <Route path="/analytics" element={<AnalyticsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/settings/billing" element={<BillingPage />} />
+                <Route path="/till" element={<TillPage />} />
                 <Route path="/exports" element={<ExportsPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />

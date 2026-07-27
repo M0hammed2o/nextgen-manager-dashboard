@@ -58,12 +58,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    try {
-      const rt = localStorage.getItem('refresh_token');
-      if (rt) await apiClient.post('/v1/auth/logout', { refresh_token: rt });
-    } catch { /* ignore */ }
+    // Clear client-side session state first -- the user is logged out the
+    // moment their own token/localStorage is gone, regardless of whether
+    // the server-side refresh-token revocation succeeds. Awaiting that
+    // network call before clearing local state (the previous order here)
+    // meant a slow/hanging request could block the UI from ever logging
+    // the user out at all, since there is no request timeout anywhere in
+    // apiClient. The revocation call is still made, just as a best-effort
+    // background cleanup that can't block or fail the logout itself.
+    const rt = localStorage.getItem('refresh_token');
     apiClient.clearTokens();
     setUser(null);
+    if (rt) {
+      apiClient.post('/v1/auth/logout', { refresh_token: rt }).catch(() => { /* best-effort only */ });
+    }
   }, []);
 
   return (

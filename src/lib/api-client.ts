@@ -127,11 +127,16 @@ class ApiClient {
   }
 
   async uploadFile(uploadUrl: string, file: File): Promise<void> {
-    await fetch(uploadUrl, {
+    const res = await fetch(uploadUrl, {
       method: 'PUT',
       headers: { 'Content-Type': file.type },
       body: file,
     });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      console.error(`Upload PUT ${res.status}:`, body);
+      throw new ApiError(`Upload failed (${res.status})`, res.status);
+    }
   }
 }
 

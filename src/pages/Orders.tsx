@@ -344,8 +344,8 @@ export default function OrdersPage() {
                           </p>
                         ))}
                         {item.selected_options_snapshot?.filter(o => o.price_delta_cents !== 0).map((o) => (
-                          <p key={o.option} className="text-xs text-muted-foreground mt-0.5">
-                            ✦ {o.option} {o.price_delta_cents > 0 ? "+" : ""}{formatCents(o.price_delta_cents)}
+                          <p key={o.option_name} className="text-xs text-muted-foreground mt-0.5">
+                            ✦ {o.option_name} {o.price_delta_cents > 0 ? "+" : ""}{formatCents(o.price_delta_cents)}
                           </p>
                         ))}
                         {item.special_instructions && (

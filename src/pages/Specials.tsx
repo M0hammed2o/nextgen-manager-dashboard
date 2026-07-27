@@ -12,6 +12,10 @@ import { PageSkeleton, EmptyState } from '@/components/shared/PageComponents';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Sparkles, Plus, Edit, Trash2, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
@@ -23,6 +27,7 @@ export default function SpecialsPage() {
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Special | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Special | null>(null);
 
   const { data: specials = [], isLoading } = useQuery({
     queryKey: ['specials'],
@@ -34,6 +39,11 @@ export default function SpecialsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['specials'] });
       toast({ title: 'Special deleted' });
+      setDeleteTarget(null);
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Could not delete special', description: err.message, variant: 'destructive' });
+      setDeleteTarget(null);
     },
   });
 
@@ -85,7 +95,7 @@ export default function SpecialsPage() {
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditing(special); setShowModal(true); }}>
                       <Edit className="w-3.5 h-3.5" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteMutation.mutate(special.id)}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteTarget(special)}>
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </div>
@@ -102,6 +112,21 @@ export default function SpecialsPage() {
           <SpecialForm special={editing} onClose={() => setShowModal(false)} />
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {deleteTarget?.title}?</AlertDialogTitle>
+            <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

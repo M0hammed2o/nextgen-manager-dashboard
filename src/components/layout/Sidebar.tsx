@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingCart, UtensilsCrossed, Sparkles,
-  Users, BarChart3, Settings, Download, ChevronLeft, ChevronRight,
+  Users, BarChart3, Settings, Download, ChevronLeft, ChevronRight, CreditCard, Wallet,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -13,8 +13,10 @@ const navItems = [
   { to: '/menu', icon: UtensilsCrossed, label: 'Menu' },
   { to: '/specials', icon: Sparkles, label: 'Specials' },
   { to: '/staff', icon: Users, label: 'Staff' },
+  { to: '/till', icon: Wallet, label: 'Till' },
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
   { to: '/settings', icon: Settings, label: 'Settings' },
+  { to: '/settings/billing', icon: CreditCard, label: 'Billing' },
   { to: '/exports', icon: Download, label: 'Exports' },
 ];
 
@@ -39,9 +41,16 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-        {navItems.map((item) => {
-          const isActive = item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to);
-          return (
+        {/* Pick the single longest-matching `to` prefix as active, so a nested
+            route like /settings/billing doesn't also light up /settings. */}
+        {(() => {
+          const activeTo = navItems
+            .filter((item) => (item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to)))
+            .sort((a, b) => b.to.length - a.to.length)[0]?.to;
+
+          return navItems.map((item) => {
+            const isActive = item.to === activeTo;
+            return (
             <NavLink
               key={item.to}
               to={item.to}
@@ -54,8 +63,9 @@ export function Sidebar() {
               <item.icon className="w-5 h-5 flex-shrink-0" />
               {!collapsed && <span>{item.label}</span>}
             </NavLink>
-          );
-        })}
+            );
+          });
+        })()}
       </nav>
 
       <button

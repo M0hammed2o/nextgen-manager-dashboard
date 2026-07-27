@@ -96,7 +96,11 @@ export interface OrderItem {
   line_total_cents: number;
   options_snapshot: Record<string, unknown> | null;
   add_ons_snapshot: OrderItemAddOn[] | null;
-  selected_options_snapshot: Array<{ group: string; option: string; price_delta_cents: number }> | null;
+  // Matches what the backend actually ever writes here (both
+  // backend/app/bot/pipeline.py::_resolve_option_prices and
+  // backend/app/pos/pricing.py) -- group_id/option_id also exist but are
+  // unused by this app today.
+  selected_options_snapshot: Array<{ group_name: string; option_name: string; price_delta_cents: number }> | null;
   special_instructions: string | null;
 }
 
@@ -334,4 +338,38 @@ export interface UploadUrlResponse {
 
 export interface SignedUrlResponse {
   signed_url: string;
+}
+
+// ── Billing (NextGen's own SaaS subscription of this business — distinct
+//    from the customer-facing PaymentMethods/PaymentProvider settings above) ──
+export type SelfServicePlan = 'STARTER' | 'GROWTH';
+
+export interface BillingStatus {
+  plan: string;
+  billing_status: string;
+  is_active: boolean;
+  has_subscription: boolean;
+  supports_self_service_portal: boolean;
+}
+
+export interface CheckoutSessionResponse {
+  checkout_url: string;
+}
+
+export interface PortalSessionResponse {
+  portal_url: string | null;
+  supported: boolean;
+}
+
+// Matches the Staff PWA's identical type (nextgen-staff-ops-main/src/types/index.ts)
+// -- same backend routes (`/business/pos/till/*`), same response shape.
+export interface TillSession {
+  id: string;
+  status: 'OPEN' | 'CLOSED';
+  opening_float_cents: number;
+  expected_cash_cents: number | null;
+  counted_cash_cents: number | null;
+  variance_cents: number | null;
+  opened_at: string;
+  closed_at: string | null;
 }
