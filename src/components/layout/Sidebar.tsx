@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { BarChart3, Boxes, ChefHat, ChevronLeft, ChevronRight, ClipboardCheck, CreditCard, Download, FileUp, LayoutDashboard, Package, Receipt, Rocket, Settings, ShoppingCart, Sparkles, TrendingDown, Users, UtensilsCrossed, Wallet } from 'lucide-react';
+import { BarChart3, Bike, Boxes, ChefHat, ChevronLeft, ChevronRight, ClipboardCheck, CreditCard, Download, FileUp, LayoutDashboard, Package, Receipt, Rocket, Settings, ShoppingCart, Sparkles, TrendingDown, Users, UtensilsCrossed, Wallet } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import logoNextgen from '@/assets/logo-nextgen.jpeg';
@@ -13,6 +13,7 @@ const navItems = [
   { to: '/staff', icon: Users, label: 'Staff' },
   { to: '/till', icon: Wallet, label: 'Till' },
   { to: '/import', icon: FileUp, label: 'Import' },
+  { to: '/delivery-orders', icon: Bike, label: 'Delivery orders' },
   { to: '/ingredients', icon: Package, label: 'Ingredients' },
   { to: '/recipes', icon: ChefHat, label: 'Recipes' },
   { to: '/stock', icon: Boxes, label: 'Stock' },

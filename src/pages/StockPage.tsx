@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { formatCurrency } from '@/lib/mappers';
@@ -65,6 +66,20 @@ export default function StockPage() {
   const [showReceiving, setShowReceiving] = useState(false);
   const [drillDown, setDrillDown] = useState<LiveStockRow | null>(null);
   const [attentionOnly, setAttentionOnly] = useState(false);
+
+  // Delivery-sales freshness. Without this, a manager looking at expected
+  // stock has no way to know whether today's Uber/Mr D sales are included —
+  // and un-imported sales look exactly like a loss that never happened.
+  const { data: externalStatus } = useQuery({
+    queryKey: ['external-status'],
+    queryFn: () =>
+      apiClient.get<{
+        platforms: { label: string; ever_imported: boolean; is_stale: boolean;
+                     covered_through: string | null }[];
+        any_stale: boolean;
+        stock_warning: string | null;
+      }>('/v1/business/external-orders/status'),
+  });
 
   const { data: live, isLoading, error } = useQuery({
     queryKey: ['live-stock'],
@@ -146,6 +161,33 @@ export default function StockPage() {
           {showReceiving ? 'Close' : 'Record a delivery'}
         </Button>
       </div>
+
+      {externalStatus?.any_stale && (
+        <Card className="border-amber-500/50">
+          <CardContent className="flex items-start gap-3 py-4">
+            <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-amber-500" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium">
+                Expected stock may be overstated — delivery sales are not fully imported
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {externalStatus.platforms
+                  .filter((p) => p.is_stale && p.ever_imported)
+                  .map((p) => `${p.label} counted through ${
+                    p.covered_through ? new Date(p.covered_through).toLocaleString() : 'never'
+                  }`)
+                  .join(' · ')}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Import today's delivery orders before treating any difference below as a loss.
+              </p>
+              <Button variant="outline" size="sm" className="mt-2" asChild>
+                <Link to="/delivery-orders">Import delivery orders</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>

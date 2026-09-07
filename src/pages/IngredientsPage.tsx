@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PageSkeleton } from '@/components/shared/PageComponents';
-import { Loader2, Plus, Package, AlertTriangle } from 'lucide-react';
+import { AlertTriangle, EyeOff, Loader2, Package, Pencil, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 /**
@@ -51,6 +51,7 @@ export default function IngredientsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: '',
     canonical_unit: 'GRAM',
@@ -63,6 +64,51 @@ export default function IngredientsPage() {
     cost_per_pack_cents: '',
     par_level_quantity: '',
   });
+
+  const blankForm = () => ({
+    name: '', canonical_unit: 'GRAM', count_method: 'WEIGHT',
+    unit_label: '', category: '',
+    purchase_unit_name: '', purchase_pack_quantity: '1', purchase_pack_unit: 'KG',
+    cost_per_pack_cents: '', par_level_quantity: '',
+  });
+
+  /**
+   * Load an existing ingredient into the form.
+   *
+   * Quantities come back from the API in canonical milli-units, so they are
+   * converted to the unit the owner actually typed. Editing must never be a
+   * delete-and-recreate: the stock ledger references ingredients with ON
+   * DELETE RESTRICT precisely so history survives, and recreating one would
+   * orphan every past movement from the name it was recorded against.
+   */
+  function startEdit(item: Ingredient) {
+    const packUnit =
+      item.canonical_unit === 'GRAM' ? 'KG'
+        : item.canonical_unit === 'MILLILITRE' ? 'L'
+          : (item.unit_label ? item.unit_label.toUpperCase() : 'UNIT');
+    const divisor =
+      item.canonical_unit === 'GRAM' || item.canonical_unit === 'MILLILITRE'
+        ? 1000 * 1000   // milli -> kg / L
+        : 1000;         // milli -> whole units
+    setEditingId(item.id);
+    setShowForm(true);
+    setForm({
+      name: item.name,
+      canonical_unit: item.canonical_unit,
+      count_method: item.count_method,
+      unit_label: item.unit_label ?? '',
+      category: item.category ?? '',
+      purchase_unit_name: item.purchase_unit_name ?? '',
+      purchase_pack_quantity: String(item.purchase_pack_milli / divisor),
+      purchase_pack_unit: PACK_UNITS_BY_FAMILY[item.canonical_unit]?.includes(packUnit)
+        ? packUnit
+        : (PACK_UNITS_BY_FAMILY[item.canonical_unit]?.[0] ?? 'UNIT'),
+      cost_per_pack_cents:
+        item.cost_per_pack_cents != null ? String(item.cost_per_pack_cents / 100) : '',
+      par_level_quantity:
+        item.par_level_milli != null ? String(item.par_level_milli / divisor) : '',
+    });
+  }
 
   const { data: ingredients, isLoading, error } = useQuery({
     queryKey: ['ingredients'],
@@ -102,6 +148,53 @@ export default function IngredientsPage() {
       toast({ title: 'Could not add that', description: err.message, variant: 'destructive' }),
   });
 
+  const updateMutation = useMutation({
+    mutationFn: () =>
+      apiClient.patch<Ingredient>(`/v1/business/inventory/ingredients/${editingId}`, {
+        name: form.name.trim(),
+        count_method: form.count_method,
+        unit_label: form.unit_label.trim() || null,
+        category: form.category.trim() || null,
+        purchase_unit_name: form.purchase_unit_name.trim() || null,
+        purchase_pack_quantity: form.purchase_pack_quantity || '1',
+        purchase_pack_unit: form.purchase_pack_unit,
+        cost_per_pack_cents: form.cost_per_pack_cents
+          ? Math.round(parseFloat(form.cost_per_pack_cents) * 100)
+          : null,
+        par_level_quantity: form.par_level_quantity || null,
+        par_level_unit: form.par_level_quantity ? form.purchase_pack_unit : null,
+      }),
+    onSuccess: (updated) => {
+      // Cost changes affect FUTURE movements only — existing ledger rows keep
+      // the cost snapshotted when they were posted, so history never reprices.
+      ['ingredients', 'stock-levels', 'live-stock', 'recipes', 'setup-progress']
+        .forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
+      setShowForm(false);
+      setEditingId(null);
+      setForm(blankForm());
+      toast({ title: 'Ingredient updated', description: `${updated.name} saved.` });
+    },
+    onError: (err: Error) =>
+      toast({ title: 'Could not save', description: err.message, variant: 'destructive' }),
+  });
+
+  const deactivateMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiClient.patch(`/v1/business/inventory/ingredients/${id}`, { is_active: false }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ingredients'] });
+      toast({
+        title: 'Ingredient hidden',
+        description: 'It stays on past stock records, but will not appear on new counts.',
+      });
+    },
+    onError: (err: Error) =>
+      toast({ title: 'Could not hide it', description: err.message, variant: 'destructive' }),
+  });
+
+  const isEditing = editingId !== null;
+  const saving = createMutation.isPending || updateMutation.isPending;
+
   if (isLoading) return <PageSkeleton />;
 
   if (error) {
@@ -139,7 +232,19 @@ export default function IngredientsPage() {
             What you physically stock. Recipes consume these.
           </p>
         </div>
-        <Button onClick={() => setShowForm((v) => !v)}>
+        <Button
+          onClick={() => {
+            if (showForm) {
+              setShowForm(false);
+              setEditingId(null);
+              setForm(blankForm());
+            } else {
+              setEditingId(null);
+              setForm(blankForm());
+              setShowForm(true);
+            }
+          }}
+        >
           <Plus className="mr-2 h-4 w-4" />
           {showForm ? 'Cancel' : 'Add ingredient'}
         </Button>
@@ -164,9 +269,10 @@ export default function IngredientsPage() {
       {showForm && (
         <Card>
           <CardHeader>
-            <CardTitle>New ingredient</CardTitle>
+            <CardTitle>{isEditing ? 'Edit ingredient' : 'New ingredient'}</CardTitle>
             <CardDescription>
               How it is stored, how it is bought, and how staff should count it.
+              {isEditing && ' Changing the cost affects future stock value only — past records keep the cost they were recorded at.'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -185,6 +291,7 @@ export default function IngredientsPage() {
                 <select
                   id="unit"
                   value={form.canonical_unit}
+                  disabled={isEditing}
                   onChange={(e) =>
                     setForm({
                       ...form,
@@ -205,6 +312,12 @@ export default function IngredientsPage() {
                     <option key={u.value} value={u.value}>{u.label} — {u.hint}</option>
                   ))}
                 </select>
+                {isEditing && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    How something is measured cannot change once stock has been recorded
+                    against it — past movements are stored in this unit.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -317,13 +430,28 @@ export default function IngredientsPage() {
               </div>
             </div>
 
-            <Button
-              onClick={() => createMutation.mutate()}
-              disabled={!form.name.trim() || createMutation.isPending}
-            >
-              {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Add ingredient
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={() => (isEditing ? updateMutation.mutate() : createMutation.mutate())}
+                disabled={!form.name.trim() || saving}
+              >
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isEditing ? 'Save changes' : 'Add ingredient'}
+              </Button>
+              {isEditing && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowForm(false);
+                    setEditingId(null);
+                    setForm(blankForm());
+                  }}
+                  disabled={saving}
+                >
+                  Cancel
+                </Button>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -349,6 +477,7 @@ export default function IngredientsPage() {
                     <th className="px-4 py-3">Group</th>
                     <th className="px-4 py-3">Pack</th>
                     <th className="px-4 py-3 text-right">Pack cost</th>
+                    <th className="px-4 py-3" />
                   </tr>
                 </thead>
                 <tbody>
@@ -375,6 +504,24 @@ export default function IngredientsPage() {
                         {item.cost_per_pack_cents != null
                           ? formatCurrency(item.cost_per_pack_cents / 100)
                           : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => startEdit(item)}>
+                            <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
+                          </Button>
+                          {item.is_active && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deactivateMutation.mutate(item.id)}
+                              disabled={deactivateMutation.isPending}
+                              title="Stop using this ingredient without losing its history"
+                            >
+                              <EyeOff className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
