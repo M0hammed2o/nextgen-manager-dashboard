@@ -29,7 +29,7 @@ import { useToast } from '@/hooks/use-toast';
 const UNITS: { value: string; label: string; hint: string }[] = [
   { value: 'GRAM', label: 'Weight (g)', hint: 'Cheese, chicken, flour' },
   { value: 'MILLILITRE', label: 'Volume (ml)', hint: 'Oil, poured sauces' },
-  { value: 'UNIT', label: 'Countable', hint: 'Dough balls, boxes, cans' },
+  { value: 'UNIT', label: 'Counted whole', hint: 'Portions, dough balls, boxes, cans' },
 ];
 
 const COUNT_METHODS: { value: string; label: string; hint: string }[] = [
@@ -38,7 +38,14 @@ const COUNT_METHODS: { value: string; label: string; hint: string }[] = [
   { value: 'VOLUME', label: 'Measure volume', hint: 'Measure the volume' },
 ];
 
-const PACK_UNITS = ['KG', 'G', 'L', 'ML', 'UNIT'];
+// Pack units offered per measurement family. A pack must be in the same
+// family as the ingredient itself, or the API (correctly) rejects the
+// conversion — so we never show kg against a countable portion.
+const PACK_UNITS_BY_FAMILY: Record<string, string[]> = {
+  GRAM: ['KG', 'G'],
+  MILLILITRE: ['L', 'ML'],
+  UNIT: ['UNIT', 'PORTION', 'BOX', 'SACHET', 'BOTTLE', 'BALL', 'CAN'],
+};
 
 export default function IngredientsPage() {
   const queryClient = useQueryClient();
@@ -48,6 +55,8 @@ export default function IngredientsPage() {
     name: '',
     canonical_unit: 'GRAM',
     count_method: 'WEIGHT',
+    unit_label: '',
+    category: '',
     purchase_unit_name: '',
     purchase_pack_quantity: '1',
     purchase_pack_unit: 'KG',
@@ -66,6 +75,8 @@ export default function IngredientsPage() {
         name: form.name.trim(),
         canonical_unit: form.canonical_unit,
         count_method: form.count_method,
+        unit_label: form.unit_label.trim() || null,
+        category: form.category.trim() || null,
         purchase_unit_name: form.purchase_unit_name.trim() || null,
         purchase_pack_quantity: form.purchase_pack_quantity || '1',
         purchase_pack_unit: form.purchase_pack_unit,
@@ -81,6 +92,7 @@ export default function IngredientsPage() {
       setShowForm(false);
       setForm({
         name: '', canonical_unit: 'GRAM', count_method: 'WEIGHT',
+        unit_label: '', category: '',
         purchase_unit_name: '', purchase_pack_quantity: '1', purchase_pack_unit: 'KG',
         cost_per_pack_cents: '', par_level_quantity: '',
       });
@@ -196,6 +208,45 @@ export default function IngredientsPage() {
               </div>
             </div>
 
+            {form.canonical_unit === 'UNIT' && (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label htmlFor="unitlabel">What do you call one?</Label>
+                  <Input
+                    id="unitlabel"
+                    value={form.unit_label}
+                    onChange={(e) => setForm({ ...form, unit_label: e.target.value })}
+                    placeholder="portion, box, sachet, ball…"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Used everywhere stock is shown, so your screens read
+                    "72 {form.unit_label.trim() ? `${form.unit_label.trim()}s` : 'portions'}"
+                    instead of a bare number.
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="cat">Group (optional)</Label>
+                  <Input
+                    id="cat"
+                    value={form.category}
+                    onChange={(e) => setForm({ ...form, category: e.target.value })}
+                    placeholder="Dairy, Packaging, Dough…"
+                  />
+                </div>
+              </div>
+            )}
+            {form.canonical_unit !== 'UNIT' && (
+              <div className="md:w-1/2">
+                <Label htmlFor="cat2">Group (optional)</Label>
+                <Input
+                  id="cat2"
+                  value={form.category}
+                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                  placeholder="Dairy, Packaging, Dry Goods…"
+                />
+              </div>
+            )}
+
             <div className="grid gap-4 md:grid-cols-3">
               <div>
                 <Label htmlFor="packname">Pack description</Label>
@@ -220,7 +271,9 @@ export default function IngredientsPage() {
                     onChange={(e) => setForm({ ...form, purchase_pack_unit: e.target.value })}
                     className="h-10 rounded-md border border-input bg-background px-2 text-sm"
                   >
-                    {PACK_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                    {(PACK_UNITS_BY_FAMILY[form.canonical_unit] ?? ['UNIT']).map((u) => (
+                      <option key={u} value={u}>{u.toLowerCase()}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -292,7 +345,8 @@ export default function IngredientsPage() {
                   <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                     <th className="px-4 py-3">Ingredient</th>
                     <th className="px-4 py-3">On hand</th>
-                    <th className="px-4 py-3">Count by</th>
+                    <th className="px-4 py-3">Counted in</th>
+                    <th className="px-4 py-3">Group</th>
                     <th className="px-4 py-3">Pack</th>
                     <th className="px-4 py-3 text-right">Pack cost</th>
                   </tr>
@@ -308,9 +362,12 @@ export default function IngredientsPage() {
                         {item.below_par && <span className="ml-2 text-xs text-amber-600">low</span>}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {COUNT_METHODS.find((m) => m.value === item.count_method)?.label ??
-                          item.count_method}
+                        {item.unit_label
+                          ? `${item.unit_label}s`
+                          : item.canonical_unit === 'GRAM' ? 'grams'
+                            : item.canonical_unit === 'MILLILITRE' ? 'millilitres' : 'units'}
                       </td>
+                      <td className="px-4 py-3 text-muted-foreground">{item.category ?? '—'}</td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {item.purchase_unit_name ?? '—'}
                       </td>

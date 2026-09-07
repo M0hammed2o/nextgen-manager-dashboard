@@ -9,8 +9,29 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PageSkeleton } from '@/components/shared/PageComponents';
-import { Loader2, Plus, Trash2, ChefHat } from 'lucide-react';
+import {
+  AlertTriangle, CheckCircle2, ChefHat, Copy, Loader2, Plus, Trash2, XCircle,
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+
+interface RecipeCoverageItem {
+  menu_item_id: string;
+  name: string;
+  is_active: boolean;
+  status: 'complete' | 'incomplete' | 'none';
+  line_count: number;
+  sizes_total: number;
+  sizes_covered: number;
+  message: string;
+}
+
+interface RecipeCoverage {
+  total_items: number;
+  complete: number;
+  incomplete: number;
+  missing: number;
+  items: RecipeCoverageItem[];
+}
 
 interface DraftLine {
   ingredient_id: string;
@@ -47,10 +68,21 @@ export default function RecipesPage() {
   const { toast } = useToast();
   const [selectedItemId, setSelectedItemId] = useState('');
   const [draft, setDraft] = useState<DraftLine[]>([]);
+  const [copyFrom, setCopyFrom] = useState('');
+  const [copyTo, setCopyTo] = useState('');
 
   const { data: recipes, isLoading, error } = useQuery({
     queryKey: ['recipes'],
     queryFn: () => apiClient.get<Recipe[]>('/v1/business/recipes'),
+  });
+
+  // Server-side completeness. Computed there rather than here because the
+  // subtle case — an item WITH a recipe whose sizes are not all scoped —
+  // needs to know which options exist, and getting it wrong would tell a
+  // manager they are ready when some sizes silently deduct nothing.
+  const { data: coverage } = useQuery({
+    queryKey: ['recipe-coverage'],
+    queryFn: () => apiClient.get<RecipeCoverage>('/v1/business/setup/recipe-coverage'),
   });
 
   const { data: ingredients } = useQuery({
@@ -112,6 +144,8 @@ export default function RecipesPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recipes'] });
+      queryClient.invalidateQueries({ queryKey: ['recipe-coverage'] });
+      queryClient.invalidateQueries({ queryKey: ['setup-progress'] });
       setDraft([]);
       setSelectedItemId('');
       toast({ title: 'Recipe saved', description: 'Sales of this item will now consume stock.' });
@@ -119,6 +153,33 @@ export default function RecipesPage() {
     onError: (e: Error) =>
       toast({ title: 'Could not save recipe', description: e.message, variant: 'destructive' }),
   });
+
+  /**
+   * Copy every line scoped to one size onto another size.
+   *
+   * Franchise recipes are structurally near-identical between sizes — same
+   * ingredients, different portions — so building Large from Small and
+   * adjusting two numbers is far less error-prone than retyping the lot.
+   * Lines that apply to every size are left alone; copying them would create
+   * duplicates that double-deduct.
+   */
+  function copyBetweenSizes(fromOptionId: string, toOptionId: string) {
+    if (!fromOptionId || !toOptionId || fromOptionId === toOptionId) return;
+    const source = draft.filter((l) => l.option_id === fromOptionId);
+    if (source.length === 0) {
+      toast({
+        title: 'Nothing to copy',
+        description: 'That size has no ingredients of its own yet.',
+      });
+      return;
+    }
+    const kept = draft.filter((l) => l.option_id !== toOptionId);
+    setDraft([...kept, ...source.map((l) => ({ ...l, option_id: toOptionId }))]);
+    toast({
+      title: 'Copied',
+      description: `${source.length} ingredient line(s) copied. Adjust the quantities.`,
+    });
+  }
 
   function loadExisting() {
     if (!existing) return;
@@ -162,17 +223,83 @@ export default function RecipesPage() {
         </p>
       </div>
 
-      {missing.length > 0 && (
-        <Card className="border-amber-500/40">
-          <CardContent className="py-4">
-            <p className="text-sm font-medium">
-              {missing.length} menu item{missing.length === 1 ? '' : 's'} have no recipe
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Selling these deducts nothing, so variance will understate usage:{' '}
-              {missing.slice(0, 8).map((m) => m.name).join(', ')}
-              {missing.length > 8 ? `, and ${missing.length - 8} more` : ''}
-            </p>
+      {coverage && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Recipe status</CardTitle>
+            <CardDescription>
+              An item with no recipe still sells — it just does not reduce any stock, so your
+              expected figures will be too high.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border p-3">
+                <p className="text-xs uppercase text-muted-foreground">Ready</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-600">
+                  {coverage.complete}
+                </p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-xs uppercase text-muted-foreground">Some sizes missing</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums text-amber-600">
+                  {coverage.incomplete}
+                </p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-xs uppercase text-muted-foreground">No recipe</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums text-destructive">
+                  {coverage.missing}
+                </p>
+              </div>
+            </div>
+
+            {coverage.items.filter((i) => i.status !== 'complete').length > 0 && (
+              <div className="overflow-x-auto rounded-lg border">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-xs uppercase text-muted-foreground">
+                      <th className="px-3 py-2">Menu item</th>
+                      <th className="px-3 py-2">Status</th>
+                      <th className="px-3 py-2">What is missing</th>
+                      <th className="px-3 py-2" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {coverage.items.filter((i) => i.status !== 'complete').map((item) => (
+                      <tr key={item.menu_item_id} className="border-b last:border-0">
+                        <td className="px-3 py-2 font-medium">{item.name}</td>
+                        <td className="px-3 py-2">
+                          {item.status === 'none' ? (
+                            <span className="flex items-center gap-1.5 text-destructive">
+                              <XCircle className="h-3.5 w-3.5" /> No recipe
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1.5 text-amber-600">
+                              <AlertTriangle className="h-3.5 w-3.5" /> Incomplete
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">{item.message}</td>
+                        <td className="px-3 py-2 text-right">
+                          <Button variant="outline" size="sm"
+                            onClick={() => { setSelectedItemId(item.menu_item_id); setDraft([]); }}>
+                            Build it
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {coverage.items.length > 0 && coverage.missing === 0 && coverage.incomplete === 0 && (
+              <p className="flex items-center gap-2 text-sm text-emerald-600">
+                <CheckCircle2 className="h-4 w-4" />
+                Every menu item has a complete recipe.
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
@@ -296,6 +423,44 @@ export default function RecipesPage() {
                   </div>
                 );
               })}
+
+              {optionChoices.length > 1 && (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 p-3">
+                  <span className="text-sm font-medium">Copy from</span>
+                  <select
+                    value={copyFrom}
+                    onChange={(e) => setCopyFrom(e.target.value)}
+                    className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                  >
+                    <option value="">choose a size…</option>
+                    {optionChoices.map((o) => (
+                      <option key={o.id} value={o.id}>{o.label}</option>
+                    ))}
+                  </select>
+                  <span className="text-sm font-medium">to</span>
+                  <select
+                    value={copyTo}
+                    onChange={(e) => setCopyTo(e.target.value)}
+                    className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                  >
+                    <option value="">choose a size…</option>
+                    {optionChoices.map((o) => (
+                      <option key={o.id} value={o.id}>{o.label}</option>
+                    ))}
+                  </select>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => copyBetweenSizes(copyFrom, copyTo)}
+                    disabled={!copyFrom || !copyTo || copyFrom === copyTo}
+                  >
+                    <Copy className="mr-2 h-4 w-4" /> Copy
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    Then adjust the portions for the new size.
+                  </span>
+                </div>
+              )}
 
               <div className="flex flex-wrap gap-2">
                 <Button

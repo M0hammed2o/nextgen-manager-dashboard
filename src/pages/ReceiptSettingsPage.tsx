@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PageSkeleton } from '@/components/shared/PageComponents';
-import { Loader2, Receipt, Printer } from 'lucide-react';
+import { FileImage, Loader2, Printer, Receipt, Upload, X } from 'lucide-react';
+import { useRef, useState as useLocalState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
 interface BusinessSettings {
@@ -22,6 +23,13 @@ interface BusinessSettings {
   receipt_copies?: number;
   print_kitchen_receipt?: boolean;
   receipt_config_json?: Record<string, unknown> | null;
+  receipt_reference_asset_id?: string | null;
+}
+
+interface UploadUrlResponse {
+  upload_url: string;
+  public_url: string;
+  asset_id: string;
 }
 
 /**
@@ -42,6 +50,11 @@ export default function ReceiptSettingsPage() {
     queryKey: ['business-settings'],
     queryFn: () => apiClient.get<BusinessSettings>('/v1/business/settings'),
   });
+
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [referenceUrl, setReferenceUrl] = useLocalState<string | null>(null);
+  const [referenceIsPdf, setReferenceIsPdf] = useLocalState(false);
+  const [uploading, setUploading] = useLocalState(false);
 
   const [form, setForm] = useState({
     vat_registered: false,
@@ -82,6 +95,58 @@ export default function ReceiptSettingsPage() {
       qr_data: config.qr_data ?? '',
     });
   }, [data]);
+
+  /**
+   * Upload the restaurant's EXISTING till slip as a design reference.
+   *
+   * This file is never printed. A thermal head is 1-bit and 384/576 dots
+   * wide, a photo cannot reflow for a variable number of line items, and
+   * totals and VAT have to be live values rather than pixels. We keep it so
+   * the manager can sit their old slip next to the preview and match the
+   * layout field by field.
+   */
+  async function uploadReference(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const allowed = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'];
+    if (!allowed.includes(file.type)) {
+      toast({
+        title: 'Unsupported file',
+        description: 'Upload a photo (PNG or JPEG) or a PDF of your current slip.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: 'File too large', description: 'Please keep it under 5MB.', variant: 'destructive' });
+      return;
+    }
+    setUploading(true);
+    try {
+      const { upload_url, public_url, asset_id } = await apiClient.post<UploadUrlResponse>(
+        '/v1/business/assets/upload-url',
+        { kind: 'RECEIPT_REFERENCE', content_type: file.type, original_filename: file.name }
+      );
+      await apiClient.uploadFile(upload_url, file);
+      await apiClient.put('/v1/business/settings', { receipt_reference_asset_id: asset_id });
+      setReferenceUrl(public_url);
+      setReferenceIsPdf(file.type === 'application/pdf');
+      queryClient.invalidateQueries({ queryKey: ['business-settings'] });
+      toast({
+        title: 'Reference saved',
+        description: 'Use it to match your settings below. It is never printed.',
+      });
+    } catch (err) {
+      toast({
+        title: 'Upload failed',
+        description: (err as Error).message,
+        variant: 'destructive',
+      });
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  }
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -278,6 +343,135 @@ export default function ReceiptSettingsPage() {
           </label>
         </CardContent>
       </Card>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileImage className="h-5 w-5" /> Your current till slip
+            </CardTitle>
+            <CardDescription>
+              Upload a photo or PDF of the slip you print today, then match the settings
+              above to it. This file is a reference only — it is never printed.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,application/pdf"
+              className="hidden"
+              onChange={uploadReference}
+            />
+            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={uploading}>
+              {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+              {referenceUrl ? 'Replace reference' : 'Upload your slip'}
+            </Button>
+
+            {referenceUrl && (
+              <div className="rounded-lg border p-2">
+                {referenceIsPdf ? (
+                  <a href={referenceUrl} target="_blank" rel="noreferrer"
+                     className="flex items-center gap-2 p-3 text-sm text-primary underline">
+                    <FileImage className="h-4 w-4" /> Open the PDF you uploaded
+                  </a>
+                ) : (
+                  <img src={referenceUrl} alt="Your current till slip"
+                       className="max-h-96 w-full object-contain" />
+                )}
+              </div>
+            )}
+            {!referenceUrl && (
+              <p className="text-sm text-muted-foreground">
+                Nothing uploaded yet.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Preview</CardTitle>
+            <CardDescription>
+              How your slip will print at {form.receipt_paper_width_mm}&nbsp;mm, using example
+              sale figures.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div
+              className="mx-auto overflow-hidden rounded border bg-white p-3 font-mono text-[11px] leading-tight text-black"
+              style={{ width: form.receipt_paper_width_mm === 58 ? '58mm' : '80mm' }}
+            >
+              <div className="text-center">
+                {form.franchise_name &&
+                  form.franchise_name.trim().toLowerCase() !== form.trading_name.trim().toLowerCase() && (
+                    <div className="font-bold">{form.franchise_name}</div>
+                  )}
+                <div className="font-bold">{form.trading_name || 'Your Restaurant'}</div>
+                {form.branch_name && <div>{form.branch_name}</div>}
+                {form.address && <div>{form.address}</div>}
+                {form.phone && <div>Tel: {form.phone}</div>}
+                {form.vat_registered && form.vat_number && <div>VAT No: {form.vat_number}</div>}
+                {form.vat_registered && <div className="mt-1 font-bold">TAX INVOICE</div>}
+              </div>
+
+              <div className="my-1 border-t border-dashed border-black" />
+              <div className="text-center font-bold">Order A-0042</div>
+              <div className="text-center">{new Date().toLocaleString()}</div>
+              <div className="my-1 border-t border-dashed border-black" />
+
+              <div className="flex justify-between"><span>2 x Large Margherita</span><span>R298.00</span></div>
+              <div className="pl-2 text-[10px]">Large</div>
+              <div className="flex justify-between"><span>1 x Coca-Cola 330ml</span><span>R22.00</span></div>
+
+              <div className="my-1 border-t border-dashed border-black" />
+              <div className="flex justify-between"><span>Subtotal</span><span>R320.00</span></div>
+              {form.vat_registered && (
+                <div className="flex justify-between">
+                  <span>
+                    VAT @ {Number(form.vat_rate_percent || 0).toFixed(2)}%
+                    {form.vat_inclusive_pricing ? ' (incl)' : ''}
+                  </span>
+                  <span>
+                    R{(form.vat_inclusive_pricing
+                        ? (320 * Number(form.vat_rate_percent || 0)) / (100 + Number(form.vat_rate_percent || 0))
+                        : (320 * Number(form.vat_rate_percent || 0)) / 100
+                      ).toFixed(2)}
+                  </span>
+                </div>
+              )}
+              <div className="my-1 border-t border-black" />
+              <div className="flex justify-between font-bold">
+                <span>TOTAL</span>
+                <span>
+                  R{(form.vat_inclusive_pricing
+                      ? 320
+                      : 320 * (1 + Number(form.vat_rate_percent || 0) / 100)
+                    ).toFixed(2)}
+                </span>
+              </div>
+              <div className="my-1 border-t border-dashed border-black" />
+              <div className="flex justify-between"><span>Paid by</span><span>CASH</span></div>
+              <div className="flex justify-between"><span>Cash</span><span>R350.00</span></div>
+              <div className="flex justify-between"><span>Change</span><span>R30.00</span></div>
+
+              {form.footer_message && (
+                <div className="mt-2 text-center">{form.footer_message}</div>
+              )}
+              {form.qr_data && (
+                <div className="mt-2 text-center text-[10px] text-neutral-500">[ QR code ]</div>
+              )}
+            </div>
+
+            {!form.vat_inclusive_pricing && form.vat_registered && (
+              <p className="mt-3 rounded border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">
+                Heads up: with VAT excluded, a R320 menu total charges the customer more than
+                R320. South African menu prices normally already include VAT.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
         {saveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

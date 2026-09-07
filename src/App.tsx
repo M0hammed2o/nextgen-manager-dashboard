@@ -21,6 +21,9 @@ import RecipesPage from '@/pages/RecipesPage';
 import StockPage from '@/pages/StockPage';
 import StocktakePage from '@/pages/StocktakePage';
 import ReceiptSettingsPage from '@/pages/ReceiptSettingsPage';
+import SetupPage from '@/pages/SetupPage';
+import ImportPage from '@/pages/ImportPage';
+import VariancePage from '@/pages/VariancePage';
 import ExportsPage from "./pages/ExportsPage";
 import NotFound from "./pages/NotFound";
 
@@ -58,6 +61,9 @@ const App = () => (
                 <Route path="/stock" element={<StockPage />} />
                 <Route path="/stocktake" element={<StocktakePage />} />
                 <Route path="/settings/receipts" element={<ReceiptSettingsPage />} />
+                <Route path="/setup" element={<SetupPage />} />
+                <Route path="/import" element={<ImportPage />} />
+                <Route path="/variance" element={<VariancePage />} />
                 <Route path="/exports" element={<ExportsPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />

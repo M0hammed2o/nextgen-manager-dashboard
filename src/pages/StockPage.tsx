@@ -2,14 +2,43 @@ import { useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { formatCurrency } from '@/lib/mappers';
-import type { Ingredient, StockLevel } from '@/types/inventory';
+import type { Ingredient, StockMovement } from '@/types/inventory';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PageSkeleton } from '@/components/shared/PageComponents';
-import { Loader2, Truck, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Truck, Plus, Trash2, AlertTriangle, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+
+interface LiveStockRow {
+  ingredient_id: string;
+  name: string;
+  category: string | null;
+  unit_label: string | null;
+  opening_display: string;
+  received_display: string;
+  used_by_sales_display: string;
+  wastage_display: string;
+  adjustments_display: string;
+  expected_display: string;
+  last_counted_display: string | null;
+  variance_display: string | null;
+  variance_value_cents: number | null;
+  variance_percent: string | null;
+  needs_attention: boolean;
+  expected_value_cents: number;
+  below_par: boolean;
+}
+
+interface LiveStock {
+  period_started_at: string | null;
+  period_label: string;
+  total_expected_value_cents: number;
+  ingredient_count: number;
+  needs_attention_count: number;
+  rows: LiveStockRow[];
+}
 
 interface ReceiptLine {
   ingredient_id: string;
@@ -19,32 +48,41 @@ interface ReceiptLine {
 }
 
 /**
- * Stock levels and goods receiving.
+ * Stock — what the restaurant should have right now, and why.
  *
- * The receiving form asks for what was COUNTED on arrival, never what was
- * ordered — there is deliberately no "expected quantity" field to copy from.
- * Receiving at ordered quantity is one of the top causes of a variance that
- * only surfaces weeks later, by which point nobody can explain it.
- *
- * "packs" is the default unit because that is how deliveries actually
- * arrive ("five bags of cheese"), and the backend converts using the
- * ingredient's own pack size so the person receiving never does mental
- * arithmetic that could be wrong.
+ * Every figure comes from the movement ledger; there is no stored "current
+ * quantity" that could drift away from the history. The breakdown columns
+ * exist so a manager can see HOW expected stock was reached rather than
+ * being handed a number to trust, and the drill-down shows the individual
+ * movements behind it — which is what separates a genuine unexplained loss
+ * from a data-entry mistake.
  */
 export default function StockPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [lines, setLines] = useState<ReceiptLine[]>([]);
   const [reference, setReference] = useState('');
+  const [showReceiving, setShowReceiving] = useState(false);
+  const [drillDown, setDrillDown] = useState<LiveStockRow | null>(null);
+  const [attentionOnly, setAttentionOnly] = useState(false);
 
-  const { data: levels, isLoading, error } = useQuery({
-    queryKey: ['stock-levels'],
-    queryFn: () => apiClient.get<StockLevel[]>('/v1/business/inventory/stock'),
+  const { data: live, isLoading, error } = useQuery({
+    queryKey: ['live-stock'],
+    queryFn: () => apiClient.get<LiveStock>('/v1/business/setup/live-stock'),
   });
 
   const { data: ingredients } = useQuery({
     queryKey: ['ingredients'],
     queryFn: () => apiClient.get<Ingredient[]>('/v1/business/inventory/ingredients'),
+  });
+
+  const { data: movements, isLoading: loadingMovements } = useQuery({
+    queryKey: ['movements', drillDown?.ingredient_id],
+    queryFn: () =>
+      apiClient.get<StockMovement[]>(
+        `/v1/business/inventory/stock/${drillDown!.ingredient_id}/movements?limit=100`
+      ),
+    enabled: !!drillDown,
   });
 
   const receiveMutation = useMutation({
@@ -61,11 +99,12 @@ export default function StockPage() {
           })),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['stock-levels'] });
+      queryClient.invalidateQueries({ queryKey: ['live-stock'] });
       queryClient.invalidateQueries({ queryKey: ['ingredients'] });
       setLines([]);
       setReference('');
-      toast({ title: 'Delivery recorded', description: 'Stock levels updated.' });
+      setShowReceiving(false);
+      toast({ title: 'Delivery recorded', description: 'Expected stock updated.' });
     },
     onError: (err: Error) =>
       toast({ title: 'Could not record that', description: err.message, variant: 'destructive' }),
@@ -75,211 +114,342 @@ export default function StockPage() {
 
   if (error) {
     const message = (error as Error).message ?? '';
-    if (message.includes('INVENTORY_NOT_ENABLED') || message.includes('not enabled')) {
+    if (message.toLowerCase().includes('not enabled') || message.includes('INVENTORY_NOT_ENABLED')) {
       return (
         <div className="space-y-4">
           <h1 className="text-2xl font-bold">Stock</h1>
-          <Card>
-            <CardContent className="py-8 text-center">
-              <p className="font-medium">Stock tracking is not switched on</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Ask NextGen to enable the inventory module for this restaurant.
-              </p>
-            </CardContent>
-          </Card>
+          <Card><CardContent className="py-8 text-center">
+            <p className="font-medium">Stock tracking is not switched on</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Ask NextGen to enable it for this restaurant.
+            </p>
+          </CardContent></Card>
         </div>
       );
     }
     return <p className="text-sm text-destructive">Could not load stock: {message}</p>;
   }
 
-  const rows = levels ?? [];
-  const totalValue = rows.reduce((sum, r) => sum + r.value_cents, 0);
+  const rows = (live?.rows ?? []).filter((r) => !attentionOnly || r.needs_attention);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Stock</h1>
-        <p className="text-sm text-muted-foreground">
-          Current levels, derived from the movement ledger — not a stored number that could drift.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Stock</h1>
+          <p className="text-sm text-muted-foreground">
+            What you should have, based on what you have sold. {live?.period_label}.
+          </p>
+        </div>
+        <Button variant={showReceiving ? 'outline' : 'default'} onClick={() => setShowReceiving((v) => !v)}>
+          <Truck className="mr-2 h-4 w-4" />
+          {showReceiving ? 'Close' : 'Record a delivery'}
+        </Button>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardContent className="py-4">
-            <p className="text-xs uppercase text-muted-foreground">Stock value</p>
+            <p className="text-xs uppercase text-muted-foreground">Expected stock value</p>
             <p className="mt-1 text-2xl font-bold tabular-nums">
-              {formatCurrency(totalValue / 100)}
+              {formatCurrency((live?.total_expected_value_cents ?? 0) / 100)}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="py-4">
             <p className="text-xs uppercase text-muted-foreground">Ingredients tracked</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums">{rows.length}</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums">{live?.ingredient_count ?? 0}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={live?.needs_attention_count ? 'border-amber-500/50' : undefined}>
           <CardContent className="py-4">
-            <p className="text-xs uppercase text-muted-foreground">Below par</p>
+            <p className="text-xs uppercase text-muted-foreground">Need a look</p>
             <p className="mt-1 text-2xl font-bold tabular-nums">
-              {rows.filter((r) => r.below_par).length}
+              {live?.needs_attention_count ?? 0}
             </p>
           </CardContent>
         </Card>
       </div>
 
+      {showReceiving && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Record a delivery</CardTitle>
+            <CardDescription>
+              Enter what you actually counted when it arrived — not what you ordered.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="max-w-xs">
+              <Label htmlFor="ref">Delivery note number</Label>
+              <Input id="ref" value={reference} onChange={(e) => setReference(e.target.value)}
+                placeholder="INV-10432" />
+            </div>
+
+            {lines.map((line, index) => {
+              const ing = (ingredients ?? []).find((i) => i.id === line.ingredient_id);
+              const noun = ing?.unit_label ?? 'units';
+              return (
+                <div key={index} className="grid gap-2 sm:grid-cols-[2fr_1fr_1fr_1fr_auto]">
+                  <select
+                    value={line.ingredient_id}
+                    onChange={(e) => {
+                      const next = [...lines];
+                      next[index] = { ...line, ingredient_id: e.target.value };
+                      setLines(next);
+                    }}
+                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="">Choose ingredient…</option>
+                    {(ingredients ?? []).map((i) => (
+                      <option key={i.id} value={i.id}>{i.name}</option>
+                    ))}
+                  </select>
+                  <Input value={line.quantity}
+                    onChange={(e) => {
+                      const next = [...lines];
+                      next[index] = { ...line, quantity: e.target.value };
+                      setLines(next);
+                    }}
+                    placeholder="How many" />
+                  <select
+                    value={line.unit}
+                    onChange={(e) => {
+                      const next = [...lines];
+                      next[index] = { ...line, unit: e.target.value };
+                      setLines(next);
+                    }}
+                    className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+                  >
+                    <option value="PACK">packs</option>
+                    {ing?.canonical_unit === 'UNIT' && <option value="UNIT">{noun}</option>}
+                    {ing?.canonical_unit === 'GRAM' && <><option value="KG">kg</option><option value="G">g</option></>}
+                    {ing?.canonical_unit === 'MILLILITRE' && <><option value="L">L</option><option value="ML">ml</option></>}
+                  </select>
+                  <Input value={line.cost}
+                    onChange={(e) => {
+                      const next = [...lines];
+                      next[index] = { ...line, cost: e.target.value };
+                      setLines(next);
+                    }}
+                    placeholder="Cost R" />
+                  <Button variant="ghost" size="icon" aria-label="Remove line"
+                    onClick={() => setLines(lines.filter((_, i) => i !== index))}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              );
+            })}
+
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline"
+                onClick={() => setLines([...lines, { ingredient_id: '', quantity: '', unit: 'PACK', cost: '' }])}>
+                <Plus className="mr-2 h-4 w-4" /> Add line
+              </Button>
+              {lines.length > 0 && (
+                <Button onClick={() => receiveMutation.mutate()}
+                  disabled={receiveMutation.isPending || !lines.some((l) => l.ingredient_id && l.quantity)}>
+                  {receiveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Record delivery
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Truck className="h-5 w-5" /> Record a delivery
-          </CardTitle>
-          <CardDescription>
-            Enter what you actually counted on arrival — not what was ordered.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="max-w-xs">
-            <Label htmlFor="ref">Delivery note / invoice no.</Label>
-            <Input
-              id="ref"
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-              placeholder="INV-10432"
-            />
-          </div>
-
-          {lines.map((line, index) => (
-            <div key={index} className="grid gap-2 sm:grid-cols-[2fr_1fr_1fr_1fr_auto]">
-              <select
-                value={line.ingredient_id}
-                onChange={(e) => {
-                  const next = [...lines];
-                  next[index] = { ...line, ingredient_id: e.target.value };
-                  setLines(next);
-                }}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="">Choose ingredient…</option>
-                {(ingredients ?? []).map((i) => (
-                  <option key={i.id} value={i.id}>
-                    {i.name}{i.purchase_unit_name ? ` (${i.purchase_unit_name})` : ''}
-                  </option>
-                ))}
-              </select>
-              <Input
-                value={line.quantity}
-                onChange={(e) => {
-                  const next = [...lines];
-                  next[index] = { ...line, quantity: e.target.value };
-                  setLines(next);
-                }}
-                placeholder="Counted"
-              />
-              <select
-                value={line.unit}
-                onChange={(e) => {
-                  const next = [...lines];
-                  next[index] = { ...line, unit: e.target.value };
-                  setLines(next);
-                }}
-                className="h-10 rounded-md border border-input bg-background px-2 text-sm"
-              >
-                <option value="PACK">packs</option>
-                <option value="KG">kg</option>
-                <option value="G">g</option>
-                <option value="L">L</option>
-                <option value="ML">ml</option>
-                <option value="UNIT">units</option>
-              </select>
-              <Input
-                value={line.cost}
-                onChange={(e) => {
-                  const next = [...lines];
-                  next[index] = { ...line, cost: e.target.value };
-                  setLines(next);
-                }}
-                placeholder="Cost R"
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setLines(lines.filter((_, i) => i !== index))}
-                aria-label="Remove line"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle>Expected stock</CardTitle>
+              <CardDescription>
+                Click any ingredient to see exactly what moved.
+              </CardDescription>
             </div>
-          ))}
-
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={() =>
-                setLines([...lines, { ingredient_id: '', quantity: '', unit: 'PACK', cost: '' }])
-              }
-            >
-              <Plus className="mr-2 h-4 w-4" /> Add line
-            </Button>
-            {lines.length > 0 && (
-              <Button
-                onClick={() => receiveMutation.mutate()}
-                disabled={
-                  receiveMutation.isPending ||
-                  !lines.some((l) => l.ingredient_id && l.quantity)
-                }
-              >
-                {receiveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Record delivery
-              </Button>
-            )}
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={attentionOnly}
+                onChange={(e) => setAttentionOnly(e.target.checked)} className="h-4 w-4" />
+              Only show ones needing a look
+            </label>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
+        </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase text-muted-foreground">
-                  <th className="px-4 py-3">Ingredient</th>
-                  <th className="px-4 py-3">On hand</th>
-                  <th className="px-4 py-3">Par level</th>
-                  <th className="px-4 py-3 text-right">Value</th>
+                  <th className="px-3 py-3">Ingredient</th>
+                  <th className="px-3 py-3">Opening</th>
+                  <th className="px-3 py-3">Received</th>
+                  <th className="px-3 py-3">Used by sales</th>
+                  <th className="px-3 py-3">Wastage</th>
+                  <th className="px-3 py-3">Adjustments</th>
+                  <th className="px-3 py-3">Expected now</th>
+                  <th className="px-3 py-3">Last count</th>
+                  <th className="px-3 py-3 text-right">Difference</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
-                      No ingredients set up yet.
+                    <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
+                      {attentionOnly ? 'Nothing needs a look right now.' : 'No ingredients set up yet.'}
                     </td>
                   </tr>
-                ) : (
-                  rows.map((row) => (
-                    <tr key={row.ingredient_id} className="border-b last:border-0">
-                      <td className="px-4 py-3 font-medium">{row.name}</td>
-                      <td className="px-4 py-3">
-                        <span className={row.below_par ? 'font-semibold text-amber-600' : ''}>
-                          {row.on_hand_display}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {row.par_level_milli != null ? (row.par_level_milli / 1000).toString() : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {formatCurrency(row.value_cents / 100)}
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ) : rows.map((row) => (
+                  <tr
+                    key={row.ingredient_id}
+                    onClick={() => setDrillDown(row)}
+                    className={`cursor-pointer border-b last:border-0 hover:bg-muted/50 ${
+                      row.needs_attention ? 'bg-amber-500/5' : ''
+                    }`}
+                  >
+                    <td className="px-3 py-2 font-medium">
+                      <span className="flex items-center gap-2">
+                        {row.needs_attention && (
+                          <AlertTriangle className="h-3.5 w-3.5 flex-none text-amber-500" />
+                        )}
+                        {row.name}
+                      </span>
+                      {row.category && (
+                        <span className="text-xs text-muted-foreground">{row.category}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 tabular-nums text-muted-foreground">{row.opening_display}</td>
+                    <td className="px-3 py-2 tabular-nums text-muted-foreground">{row.received_display}</td>
+                    <td className="px-3 py-2 tabular-nums text-muted-foreground">{row.used_by_sales_display}</td>
+                    <td className="px-3 py-2 tabular-nums text-muted-foreground">{row.wastage_display}</td>
+                    <td className="px-3 py-2 tabular-nums text-muted-foreground">{row.adjustments_display}</td>
+                    <td className="px-3 py-2 font-semibold tabular-nums">
+                      {row.expected_display}
+                      {row.below_par && (
+                        <span className="ml-2 text-xs font-normal text-amber-600">low</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 tabular-nums text-muted-foreground">
+                      {row.last_counted_display ?? '—'}
+                    </td>
+                    <td className={`px-3 py-2 text-right tabular-nums ${
+                      (row.variance_value_cents ?? 0) < 0 ? 'text-destructive' : ''
+                    }`}>
+                      {row.variance_display
+                        ? <>
+                            {row.variance_display}
+                            {row.variance_value_cents != null && (
+                              <span className="block text-xs">
+                                {formatCurrency(row.variance_value_cents / 100)}
+                              </span>
+                            )}
+                          </>
+                        : '—'}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </CardContent>
       </Card>
+
+      {drillDown && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
+          <Card className="mt-10 w-full max-w-3xl">
+            <CardHeader>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <CardTitle>{drillDown.name}</CardTitle>
+                  <CardDescription>Everything that moved this period.</CardDescription>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setDrillDown(null)} aria-label="Close">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-3">
+                {[
+                  ['Opening', drillDown.opening_display],
+                  ['Received', drillDown.received_display],
+                  ['Used by sales', drillDown.used_by_sales_display],
+                  ['Wastage', drillDown.wastage_display],
+                  ['Adjustments', drillDown.adjustments_display],
+                  ['Expected now', drillDown.expected_display],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-lg border p-3">
+                    <p className="text-xs uppercase text-muted-foreground">{label}</p>
+                    <p className="mt-1 font-semibold tabular-nums">{value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm font-medium">Movements</p>
+                {loadingMovements ? (
+                  <p className="py-4 text-center text-sm text-muted-foreground">Loading…</p>
+                ) : (movements ?? []).length === 0 ? (
+                  <p className="py-4 text-center text-sm text-muted-foreground">
+                    Nothing has moved yet.
+                  </p>
+                ) : (
+                  <div className="max-h-80 overflow-y-auto rounded-lg border">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-card">
+                        <tr className="border-b text-left text-xs uppercase text-muted-foreground">
+                          <th className="px-3 py-2">When</th>
+                          <th className="px-3 py-2">What happened</th>
+                          <th className="px-3 py-2 text-right">Change</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(movements ?? []).map((m) => (
+                          <tr key={m.id} className="border-b last:border-0">
+                            <td className="px-3 py-2 text-muted-foreground">
+                              {m.occurred_at ? new Date(m.occurred_at).toLocaleString() : '—'}
+                            </td>
+                            <td className="px-3 py-2">
+                              {MOVEMENT_LABELS[m.movement_type] ?? m.movement_type}
+                              {m.notes && (
+                                <span className="block text-xs text-muted-foreground">{m.notes}</span>
+                              )}
+                            </td>
+                            <td className={`px-3 py-2 text-right tabular-nums ${
+                              m.quantity_milli < 0 ? 'text-destructive' : 'text-emerald-600'
+                            }`}>
+                              {m.quantity_milli > 0 ? '+' : ''}
+                              {(m.quantity_milli / 1000).toLocaleString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
+
+/**
+ * Ledger movement types translated into what a restaurant would actually
+ * say. The enum values are an engineering detail and have no business on a
+ * manager's screen.
+ */
+const MOVEMENT_LABELS: Record<string, string> = {
+  OPENING_BALANCE: 'Opening stock',
+  GOODS_RECEIVED: 'Delivery received',
+  SALE_CONSUMPTION: 'Used by a sale',
+  SALE_REVERSAL: 'Sale reversed',
+  REMAKE_CONSUMPTION: 'Used by a remake',
+  WASTAGE: 'Wastage',
+  STAFF_MEAL: 'Staff meal',
+  COMPLIMENTARY: 'Complimentary',
+  MANUAL_ADJUSTMENT: 'Manual adjustment',
+  STOCKTAKE_ADJUSTMENT: 'Stocktake correction',
+  SUPPLIER_RETURN: 'Returned to supplier',
+};

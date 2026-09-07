@@ -126,6 +126,56 @@ class ApiClient {
     return this.request<T>(path, { method: 'DELETE' });
   }
 
+  /**
+   * POST multipart/form-data to our own API (spreadsheet imports).
+   *
+   * Deliberately does NOT go through request(): that always sets
+   * Content-Type: application/json, and a multipart body must be left alone
+   * so the browser can add its own boundary. Setting it by hand produces a
+   * request the server cannot parse.
+   */
+  async postForm<T>(path: string, form: FormData): Promise<T> {
+    const send = async () => {
+      const token = this.getAccessToken();
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      return fetch(`${this.baseUrl}${path}`, { method: 'POST', headers, body: form });
+    };
+
+    let res = await send();
+    if (res.status === 401 && (await this.refreshAccessToken())) {
+      res = await send();
+    }
+
+    const text = await res.text();
+    let data: unknown = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      /* a non-JSON error body is handled below */
+    }
+
+    if (!res.ok) {
+      const payload = (data ?? {}) as {
+        message?: string;
+        error?: { message?: string; details?: unknown };
+        detail?: string;
+      };
+      const message =
+        payload.error?.message ??
+        payload.message ??
+        payload.detail ??
+        `Upload failed (${res.status})`;
+      const error = new ApiError(message, res.status);
+      // Row-level import errors travel in details; the import screen needs
+      // them to show the user which spreadsheet rows to fix.
+      (error as ApiError & { details?: unknown }).details =
+        payload.error?.details ?? (data as { details?: unknown })?.details;
+      throw error;
+    }
+    return data as T;
+  }
+
   async uploadFile(uploadUrl: string, file: File): Promise<void> {
     const res = await fetch(uploadUrl, {
       method: 'PUT',
