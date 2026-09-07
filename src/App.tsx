@@ -16,6 +16,11 @@ import AnalyticsPage from "./pages/AnalyticsPage";
 import SettingsPage from "./pages/SettingsPage";
 import BillingPage from "./pages/BillingPage";
 import TillPage from "./pages/TillPage";
+import IngredientsPage from '@/pages/IngredientsPage';
+import RecipesPage from '@/pages/RecipesPage';
+import StockPage from '@/pages/StockPage';
+import StocktakePage from '@/pages/StocktakePage';
+import ReceiptSettingsPage from '@/pages/ReceiptSettingsPage';
 import ExportsPage from "./pages/ExportsPage";
 import NotFound from "./pages/NotFound";
 
@@ -48,6 +53,11 @@ const App = () => (
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/settings/billing" element={<BillingPage />} />
                 <Route path="/till" element={<TillPage />} />
+                <Route path="/ingredients" element={<IngredientsPage />} />
+                <Route path="/recipes" element={<RecipesPage />} />
+                <Route path="/stock" element={<StockPage />} />
+                <Route path="/stocktake" element={<StocktakePage />} />
+                <Route path="/settings/receipts" element={<ReceiptSettingsPage />} />
                 <Route path="/exports" element={<ExportsPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />

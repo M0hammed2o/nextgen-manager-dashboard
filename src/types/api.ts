@@ -209,8 +209,14 @@ export interface MenuOptionGroup {
   options: MenuOptionChoice[];
 }
 
+export interface RemovableIngredient {
+  id: string;
+  name: string;
+}
+
 export interface MenuItemOptions {
   option_groups: MenuOptionGroup[];
+  removable_ingredients?: RemovableIngredient[];
 }
 
 export interface MenuItem {
@@ -225,6 +231,7 @@ export interface MenuItem {
   is_active: boolean;
   sort_order: number;
   image_url: string | null;
+  requires_preparation: boolean;
 }
 
 export interface CreateMenuItemRequest {
@@ -233,11 +240,14 @@ export interface CreateMenuItemRequest {
   description?: string;
   price_cents: number;
   sort_order?: number;
-  image_asset_id?: string;
+  // null (not omitted) is required to actually CLEAR an existing image on an
+  // update — same partial-update rule as options_json below.
+  image_asset_id?: string | null;
   // null (not omitted) is required to actually CLEAR existing options on an
   // update — the backend does a partial update via exclude_unset, so an
   // omitted key leaves the stored value untouched.
   options_json?: MenuItemOptions | null;
+  requires_preparation?: boolean;
 }
 
 // Specials — matches backend SpecialResponse
@@ -318,6 +328,16 @@ export interface BusinessSettings {
   payment_api_key_hint: string | null;
   payment_api_secret_hint: string | null;
   payment_webhook_secret_configured: boolean;
+  // POS till payment settings — distinct from payment_methods_enabled above,
+  // which governs the WhatsApp/online-order flow.
+  pos_cash_enabled: boolean;
+  pos_card_enabled: boolean;
+  pos_payfast_enabled: boolean;
+  pos_yoco_enabled: boolean;
+  pos_ikhoka_enabled: boolean;
+  pos_direct_eft_enabled: boolean;
+  pos_other_payment_enabled: boolean;
+  pos_table_number_required: boolean;
 }
 
 // WhatsApp pause/busy toggle
@@ -370,6 +390,8 @@ export interface TillSession {
   expected_cash_cents: number | null;
   counted_cash_cents: number | null;
   variance_cents: number | null;
+  cash_sales_cents?: number | null;
+  cash_refunds_cents?: number | null;
   opened_at: string;
   closed_at: string | null;
 }

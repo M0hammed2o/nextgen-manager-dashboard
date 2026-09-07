@@ -84,6 +84,22 @@ export default function TillPage() {
           {result ? (
             <div className="space-y-2 max-w-sm">
               <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Opening float</span>
+                <span className="font-medium">{formatCurrency(result.opening_float_cents / 100)}</span>
+              </div>
+              {result.cash_sales_cents != null && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Cash sales</span>
+                  <span className="font-medium">+{formatCurrency(result.cash_sales_cents / 100)}</span>
+                </div>
+              )}
+              {!!result.cash_refunds_cents && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Cash refunds</span>
+                  <span className="font-medium">-{formatCurrency(result.cash_refunds_cents / 100)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Expected cash</span>
                 <span className="font-medium">{formatCurrency((result.expected_cash_cents ?? 0) / 100)}</span>
               </div>

@@ -34,6 +34,9 @@ type EditableSettings = Pick<BusinessSettings,
   | 'payment_methods_enabled' | 'online_payment_required' | 'payment_provider'
   | 'payment_timeout_minutes' | 'eft_bank_name' | 'eft_account_name'
   | 'eft_account_number' | 'eft_branch_code' | 'eft_reference_prefix'
+  | 'pos_cash_enabled' | 'pos_card_enabled' | 'pos_payfast_enabled' | 'pos_yoco_enabled'
+  | 'pos_ikhoka_enabled' | 'pos_direct_eft_enabled' | 'pos_other_payment_enabled'
+  | 'pos_table_number_required'
 > & {
   // Credential write-only fields — not in BusinessSettings (which has hints only)
   payment_api_key: string;
@@ -83,6 +86,14 @@ const EMPTY_FORM: EditableSettings = {
   eft_account_number: null,
   eft_branch_code: null,
   eft_reference_prefix: null,
+  pos_cash_enabled: true,
+  pos_card_enabled: true,
+  pos_payfast_enabled: false,
+  pos_yoco_enabled: false,
+  pos_ikhoka_enabled: false,
+  pos_direct_eft_enabled: false,
+  pos_other_payment_enabled: false,
+  pos_table_number_required: false,
   // Credentials — always start blank; only send when user types a new value
   payment_api_key: '',
   payment_api_secret: '',
@@ -129,6 +140,14 @@ export default function SettingsPage() {
         eft_account_number: settings.eft_account_number ?? null,
         eft_branch_code: settings.eft_branch_code ?? null,
         eft_reference_prefix: settings.eft_reference_prefix ?? null,
+        pos_cash_enabled: settings.pos_cash_enabled ?? true,
+        pos_card_enabled: settings.pos_card_enabled ?? true,
+        pos_payfast_enabled: settings.pos_payfast_enabled ?? false,
+        pos_yoco_enabled: settings.pos_yoco_enabled ?? false,
+        pos_ikhoka_enabled: settings.pos_ikhoka_enabled ?? false,
+        pos_direct_eft_enabled: settings.pos_direct_eft_enabled ?? false,
+        pos_other_payment_enabled: settings.pos_other_payment_enabled ?? false,
+        pos_table_number_required: settings.pos_table_number_required ?? false,
         // Credentials never come back from the server — always blank on load
         payment_api_key: '',
         payment_api_secret: '',
@@ -238,6 +257,14 @@ export default function SettingsPage() {
             eft_account_number: form.eft_account_number || null,
             eft_branch_code: form.eft_branch_code || null,
             eft_reference_prefix: form.eft_reference_prefix || null,
+            pos_cash_enabled: form.pos_cash_enabled,
+            pos_card_enabled: form.pos_card_enabled,
+            pos_payfast_enabled: form.pos_payfast_enabled,
+            pos_yoco_enabled: form.pos_yoco_enabled,
+            pos_ikhoka_enabled: form.pos_ikhoka_enabled,
+            pos_direct_eft_enabled: form.pos_direct_eft_enabled,
+            pos_other_payment_enabled: form.pos_other_payment_enabled,
+            pos_table_number_required: form.pos_table_number_required,
             // Only send credentials if the user typed something new
             ...(form.payment_api_key ? { payment_api_key: form.payment_api_key } : {}),
             ...(form.payment_api_secret ? { payment_api_secret: form.payment_api_secret } : {}),
@@ -618,6 +645,69 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
+      </section>
+
+      {/* Till (POS) Settings — distinct from the WhatsApp/online Payment
+          Settings above: these control what a cashier sees at the till. */}
+      <section className="bg-card border border-border rounded-xl p-6 space-y-4">
+        <h3 className="font-semibold text-foreground">Till (POS) Settings</h3>
+        <p className="text-sm text-muted-foreground">
+          Which payment buttons the Staff PWA's till shows to a cashier.
+        </p>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+            <Label>Cash</Label>
+            <Switch checked={form.pos_cash_enabled} onCheckedChange={v => updateField('pos_cash_enabled', v)} />
+          </div>
+          <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+            <Label>Card</Label>
+            <Switch checked={form.pos_card_enabled} onCheckedChange={v => updateField('pos_card_enabled', v)} />
+          </div>
+        </div>
+
+        <div className="space-y-2 pt-2 border-t border-border">
+          <Label className="text-sm text-muted-foreground">Other till payment methods</Label>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+              <Label>PayFast</Label>
+              <Switch checked={form.pos_payfast_enabled} onCheckedChange={v => updateField('pos_payfast_enabled', v)} />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+              <Label>Yoco</Label>
+              <Switch checked={form.pos_yoco_enabled} onCheckedChange={v => updateField('pos_yoco_enabled', v)} />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+              <Label>iKhokha</Label>
+              <Switch checked={form.pos_ikhoka_enabled} onCheckedChange={v => updateField('pos_ikhoka_enabled', v)} />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+              <Label>Direct EFT</Label>
+              <Switch checked={form.pos_direct_eft_enabled} onCheckedChange={v => updateField('pos_direct_eft_enabled', v)} />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 col-span-2">
+              <Label>Other</Label>
+              <Switch checked={form.pos_other_payment_enabled} onCheckedChange={v => updateField('pos_other_payment_enabled', v)} />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Any of these being on shows a single generic "Other" button at the till (v1 doesn't distinguish which
+            specific provider a cashier tapped — reporting on Card vs. Other by processor is a future improvement).
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between pt-2 border-t border-border">
+          <div>
+            <Label>Require Table Number</Label>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Cashiers must enter a table number for dine-in orders before checkout.
+            </p>
+          </div>
+          <Switch
+            checked={form.pos_table_number_required}
+            onCheckedChange={v => updateField('pos_table_number_required', v)}
+          />
+        </div>
       </section>
     </div>
   );

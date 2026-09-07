@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import type {
   MenuAddOn, MenuCategory, MenuItem, CreateMenuItemRequest, MenuOptionGroup, MenuOptionChoice,
+  UploadUrlResponse, RemovableIngredient,
 } from '@/types/api';
 import { formatCents } from '@/lib/mappers';
 import { Button } from '@/components/ui/button';
@@ -34,6 +35,12 @@ import { useToast } from '@/hooks/use-toast';
 function parsePriceInput(val: string): number {
   return Math.round(parseFloat(val || '0') * 100);
 }
+
+// ── Item image upload ─────────────────────────────────────────────────────────
+// Mirrors SettingsPage.tsx's business-level "Menu Image" upload pattern
+// (upload-url -> direct PUT -> attach the returned id/url to the entity).
+const ITEM_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+const ITEM_IMAGE_MAX_MB = 5;
 
 // ── Option group id generation ────────────────────────────────────────────────
 // Groups/options need a stable string id (backend requires non-empty, unique
@@ -251,9 +258,14 @@ function ItemsTab({ categories, items }: { categories: MenuCategory[]; items: Me
                   <span className="text-sm font-bold text-primary shrink-0">{formatCents(item.price_cents)}</span>
                 </div>
                 <div className="flex items-center justify-between mt-3">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${item.is_active ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                    {item.is_active ? 'Active' : 'Inactive'}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${item.is_active ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                      {item.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                    {!item.requires_preparation && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">Grab & go</span>
+                    )}
+                  </div>
                   <div className="flex gap-1">
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditingItem(item); setShowItemModal(true); }}>
                       <Edit className="w-3.5 h-3.5" />
@@ -870,6 +882,58 @@ function OptionGroupsEditor({ groups, onChange }: {
   );
 }
 
+// ── Removable ingredients editor ────────────────────────────────────────────
+// A plain, zero-priced, business-configured checkbox list (e.g. "No tomato")
+// — deliberately separate from OptionGroupsEditor above, since removals never
+// change price and are never mutually exclusive/required. Never hardcoded
+// per-business; each item gets its own list configured here.
+
+function RemovableIngredientsEditor({ ingredients, onChange }: {
+  ingredients: RemovableIngredient[];
+  onChange: (ingredients: RemovableIngredient[]) => void;
+}) {
+  function addIngredient() {
+    const id = uniqueSlug('ingredient', ingredients.map(i => i.id));
+    onChange([...ingredients, { id, name: '' }]);
+  }
+
+  function updateIngredient(index: number, name: string) {
+    onChange(ingredients.map((ing, i) => (i === index ? { ...ing, name } : ing)));
+  }
+
+  function removeIngredient(index: number) {
+    onChange(ingredients.filter((_, i) => i !== index));
+  }
+
+  return (
+    <div className="space-y-2">
+      <Label>Removable ingredients</Label>
+      <p className="text-xs text-muted-foreground">
+        Shown as "No {'{ingredient}'}" checkboxes at the till — e.g. tomato, onion, sauce.
+      </p>
+      {ingredients.map((ing, i) => (
+        <div key={ing.id} className="flex items-center gap-2">
+          <Input
+            value={ing.name}
+            onChange={e => updateIngredient(i, e.target.value)}
+            placeholder="e.g. Tomato"
+          />
+          <Button
+            type="button" variant="ghost" size="icon"
+            className="h-8 w-8 text-destructive shrink-0"
+            onClick={() => removeIngredient(i)}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+      ))}
+      <Button type="button" variant="outline" size="sm" onClick={addIngredient} className="gap-1.5">
+        <Plus className="w-3.5 h-3.5" /> Add Removable Ingredient
+      </Button>
+    </div>
+  );
+}
+
 function MenuItemForm({
   item,
   categories,
@@ -889,6 +953,59 @@ function MenuItemForm({
   const [optionGroups, setOptionGroups] = useState<MenuOptionGroup[]>(
     item?.options_json?.option_groups ?? []
   );
+  const [removableIngredients, setRemovableIngredients] = useState<RemovableIngredient[]>(
+    item?.options_json?.removable_ingredients ?? []
+  );
+  const [requiresPreparation, setRequiresPreparation] = useState(item?.requires_preparation ?? true);
+  const [imageUrl, setImageUrl] = useState(item?.image_url ?? null);
+  // undefined = unchanged (omit from payload); string = newly uploaded asset;
+  // null = explicit removal (must be sent, not omitted, so the backend
+  // actually clears the stored image_url instead of leaving it as-is).
+  const [imageAssetId, setImageAssetId] = useState<string | null | undefined>(undefined);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file again later
+    if (!file) return;
+
+    if (!ITEM_IMAGE_TYPES.includes(file.type)) {
+      toast({
+        title: 'Unsupported file type',
+        description: 'Please choose a PNG, JPEG, WebP or GIF image.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (file.size > ITEM_IMAGE_MAX_MB * 1024 * 1024) {
+      toast({
+        title: 'File too large',
+        description: `Please choose an image under ${ITEM_IMAGE_MAX_MB}MB.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsUploadingImage(true);
+    try {
+      const { upload_url, public_url, asset_id } = await apiClient.post<UploadUrlResponse>(
+        '/v1/business/assets/upload-url',
+        { kind: 'MENU_ITEM_IMAGE', content_type: file.type },
+      );
+      await apiClient.uploadFile(upload_url, file);
+      setImageUrl(public_url);
+      setImageAssetId(asset_id);
+      toast({ title: 'Image uploaded', description: item ? 'Click Update below to apply it.' : 'Click Create below to apply it.' });
+    } catch (err) {
+      toast({
+        title: 'Upload failed',
+        description: err instanceof Error ? err.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
 
   const mutation = useMutation({
     mutationFn: (data: CreateMenuItemRequest) =>
@@ -926,12 +1043,17 @@ function MenuItemForm({
       description: description || undefined,
       price_cents: parsePriceInput(priceCents),
       category_id: categoryId || undefined,
-      // null (not omitted) so clearing all groups actually clears the stored
-      // value — the backend applies partial updates via exclude_unset, so an
-      // omitted key here would leave a previously-saved options_json intact.
-      options_json: optionGroups.length > 0 ? { option_groups: optionGroups } : null,
+      // null (not omitted) so clearing all groups/removals actually clears
+      // the stored value — the backend applies partial updates via
+      // exclude_unset, so an omitted key here would leave a previously-saved
+      // options_json intact.
+      options_json: (optionGroups.length > 0 || removableIngredients.length > 0)
+        ? { option_groups: optionGroups, removable_ingredients: removableIngredients }
+        : null,
+      requires_preparation: requiresPreparation,
     };
     if (item) payload.is_active = isAvailable;
+    if (imageAssetId !== undefined) payload.image_asset_id = imageAssetId;
     mutation.mutate(payload as CreateMenuItemRequest);
   };
 
@@ -969,7 +1091,47 @@ function MenuItemForm({
           />
         </div>
       </div>
+      <div className="space-y-2">
+        <Label>Photo</Label>
+        <input
+          type="file"
+          accept={ITEM_IMAGE_TYPES.join(',')}
+          onChange={handleImageSelect}
+          disabled={isUploadingImage}
+          className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-foreground file:cursor-pointer hover:file:bg-primary/90 disabled:opacity-60"
+        />
+        {isUploadingImage && (
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <Loader2 className="w-3 h-3 animate-spin" /> Uploading…
+          </p>
+        )}
+        <p className="text-xs text-muted-foreground">PNG, JPEG, WebP or GIF — up to {ITEM_IMAGE_MAX_MB}MB. Shown on the staff till.</p>
+        {imageUrl && (
+          <div className="space-y-2">
+            <img src={imageUrl} alt={name || 'Item preview'} className="rounded-lg max-h-40 object-contain border border-border" />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => { setImageUrl(null); setImageAssetId(null); }}
+            >
+              Remove Image
+            </Button>
+          </div>
+        )}
+      </div>
       <OptionGroupsEditor groups={optionGroups} onChange={setOptionGroups} />
+      <RemovableIngredientsEditor ingredients={removableIngredients} onChange={setRemovableIngredients} />
+      <div className="flex items-center justify-between rounded-lg border border-border p-3">
+        <div>
+          <Label>Needs kitchen preparation</Label>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Off for grab-and-go items (drinks, packaged snacks) — a POS sale of only such items completes
+            immediately instead of being sent to the kitchen.
+          </p>
+        </div>
+        <Switch checked={requiresPreparation} onCheckedChange={setRequiresPreparation} />
+      </div>
       {item && (
         <div className="flex items-center gap-2">
           <Switch checked={isAvailable} onCheckedChange={setIsAvailable} />
