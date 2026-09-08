@@ -3,11 +3,13 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { formatCurrency } from '@/lib/mappers';
 import type { Stocktake, StocktakeSummary } from '@/types/inventory';
+import type { BusinessSettings } from '@/types/api';
+import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PageSkeleton } from '@/components/shared/PageComponents';
-import { Loader2, ClipboardCheck, Lock, AlertTriangle } from 'lucide-react';
+import { Loader2, ClipboardCheck, Lock, AlertTriangle, CalendarClock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const COUNT_HINT: Record<string, string> = {
@@ -15,6 +17,14 @@ const COUNT_HINT: Record<string, string> = {
   WEIGHT: 'weigh',
   VOLUME: 'measure',
 };
+
+const FREQUENCY_OPTIONS: { value: string; label: string; hint: string }[] = [
+  { value: 'DAILY_1', label: 'Once a day', hint: 'A single close-of-day count' },
+  { value: 'DAILY_2', label: 'Twice a day', hint: 'Typically open and close' },
+  { value: 'DAILY_3', label: 'Three times a day', hint: 'Open, mid-shift, close' },
+  { value: 'DAILY_4', label: 'Four times a day', hint: 'Each shift change' },
+  { value: 'CUSTOM', label: 'Custom times', hint: 'Choose your own times of day' },
+];
 
 /**
  * Stocktake and variance — the screen that answers the three questions the
@@ -32,6 +42,40 @@ export default function StocktakePage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [counts, setCounts] = useState<Record<string, string>>({});
+  const [customTimes, setCustomTimes] = useState<string>('');
+
+  // The count schedule lives with the counts rather than buried in Settings —
+  // this is the screen an owner is on when they think about how often to count.
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: () => apiClient.get<BusinessSettings>('/v1/business/settings'),
+  });
+
+  const scheduleMutation = useMutation({
+    mutationFn: (body: { stocktake_frequency: string; stocktake_times_json: string[] | null }) =>
+      apiClient.put<BusinessSettings>('/v1/business/settings', body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+      toast({ title: 'Count schedule saved' });
+    },
+    onError: (err: Error) =>
+      toast({ title: 'Could not save the schedule', description: err.message, variant: 'destructive' }),
+  });
+
+  function saveFrequency(frequency: string) {
+    if (frequency === 'CUSTOM') {
+      // Times are typed as a comma-separated list; the API validates each one
+      // and rejects a CUSTOM schedule with none, so a half-set schedule can
+      // never reach the overdue calculation.
+      const times = customTimes
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+      scheduleMutation.mutate({ stocktake_frequency: 'CUSTOM', stocktake_times_json: times });
+      return;
+    }
+    scheduleMutation.mutate({ stocktake_frequency: frequency, stocktake_times_json: null });
+  }
 
   const { data: current, isLoading, error } = useQuery({
     queryKey: ['stocktake-current'],
@@ -295,11 +339,74 @@ export default function StocktakePage() {
         </>
       )}
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <CalendarClock className="h-4 w-4" /> How often you count
+          </CardTitle>
+          <CardDescription>
+            Sets what your staff are expected to do. It never blocks a count — if a
+            delivery looks short at 3pm, anyone can start one straight away.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {FREQUENCY_OPTIONS.map((opt) => {
+              const active = (settings?.stocktake_frequency ?? 'DAILY_1') === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => saveFrequency(opt.value)}
+                  disabled={scheduleMutation.isPending}
+                  className={`rounded-lg border px-3 py-2.5 text-left transition-colors disabled:opacity-50 ${
+                    active
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/40'
+                  }`}
+                >
+                  <span className="block text-sm font-medium text-foreground">{opt.label}</span>
+                  <span className="block text-xs text-muted-foreground">{opt.hint}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {settings?.stocktake_frequency === 'CUSTOM' && (
+            <div className="space-y-1.5 border-t border-border pt-3">
+              <Label htmlFor="custom-times">Times of day</Label>
+              <div className="flex flex-wrap gap-2">
+                <Input
+                  id="custom-times"
+                  value={customTimes}
+                  onChange={(e) => setCustomTimes(e.target.value)}
+                  placeholder={(settings?.stocktake_times_json ?? []).join(', ') || '06:00, 14:00, 22:00'}
+                  className="max-w-sm"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => saveFrequency('CUSTOM')}
+                  disabled={scheduleMutation.isPending}
+                >
+                  Save times
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                24-hour times, separated by commas. Currently:{' '}
+                {(settings?.stocktake_times_json ?? []).join(', ') || 'none set'}
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {(history ?? []).length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Past counts</CardTitle>
-            <CardDescription>Approved counts are kept permanently and cannot be edited.</CardDescription>
+            <CardDescription>
+              Every count is its own record with its own cut-off — a new count never
+              overwrites an earlier one, and an approved count can no longer be edited.
+            </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -309,7 +416,10 @@ export default function StocktakePage() {
                     <th className="px-4 py-3">Reference</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Cut-off</th>
+                    <th className="px-4 py-3">Counted by</th>
+                    <th className="px-4 py-3 text-right">Lines counted</th>
                     <th className="px-4 py-3 text-right">Variance</th>
+                    <th className="px-4 py-3">Notes</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -318,14 +428,28 @@ export default function StocktakePage() {
                       <td className="px-4 py-3 font-medium">{row.reference ?? '—'}</td>
                       <td className="px-4 py-3 text-muted-foreground">{row.status}</td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {row.cutoff_at ? new Date(row.cutoff_at).toLocaleDateString() : '—'}
+                        {/* Date AND time: two counts on the same day are only
+                            distinguishable by their cut-off. */}
+                        {row.cutoff_at ? new Date(row.cutoff_at).toLocaleString() : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {row.opened_by_name ?? '—'}
+                        {row.completed_by_name && row.completed_by_name !== row.opened_by_name
+                          ? ` → ${row.completed_by_name}`
+                          : ''}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                        {row.counted_line_count}/{row.line_count}
                       </td>
                       <td
                         className={`px-4 py-3 text-right tabular-nums ${
                           row.total_variance_value_cents < 0 ? 'text-destructive' : ''
                         }`}
                       >
-                        {formatCurrency(row.total_variance_value_cents / 100)}
+                        {row.status === 'DRAFT' ? '—' : formatCurrency(row.total_variance_value_cents / 100)}
+                      </td>
+                      <td className="max-w-[16rem] truncate px-4 py-3 text-muted-foreground" title={row.notes ?? ''}>
+                        {row.notes ?? '—'}
                       </td>
                     </tr>
                   ))}

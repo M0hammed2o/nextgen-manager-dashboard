@@ -162,7 +162,18 @@ export interface StocktakeSummary {
   id: string;
   reference: string | null;
   status: StocktakeStatus;
+  opened_at: string | null;
   cutoff_at: string | null;
+  completed_at: string | null;
   approved_at: string | null;
+  /** Resolved server-side so the client needs no user directory to render an audit trail. */
+  opened_by_name: string | null;
+  completed_by_name: string | null;
+  approved_by_name: string | null;
+  line_count: number;
+  counted_line_count: number;
   total_variance_value_cents: number;
+  total_theoretical_value_cents: number;
+  is_locked: boolean;
+  notes: string | null;
 }

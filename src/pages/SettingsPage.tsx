@@ -37,6 +37,8 @@ type EditableSettings = Pick<BusinessSettings,
   | 'pos_cash_enabled' | 'pos_card_enabled' | 'pos_payfast_enabled' | 'pos_yoco_enabled'
   | 'pos_ikhoka_enabled' | 'pos_direct_eft_enabled' | 'pos_other_payment_enabled'
   | 'pos_table_number_required'
+  | 'staff_live_orders_tab_enabled' | 'staff_wastage_tab_enabled'
+  | 'staff_stocktake_tab_enabled'
 > & {
   // Credential write-only fields — not in BusinessSettings (which has hints only)
   payment_api_key: string;
@@ -94,6 +96,9 @@ const EMPTY_FORM: EditableSettings = {
   pos_direct_eft_enabled: false,
   pos_other_payment_enabled: false,
   pos_table_number_required: false,
+  staff_live_orders_tab_enabled: true,
+  staff_wastage_tab_enabled: true,
+  staff_stocktake_tab_enabled: false,
   // Credentials — always start blank; only send when user types a new value
   payment_api_key: '',
   payment_api_secret: '',
@@ -148,6 +153,9 @@ export default function SettingsPage() {
         pos_direct_eft_enabled: settings.pos_direct_eft_enabled ?? false,
         pos_other_payment_enabled: settings.pos_other_payment_enabled ?? false,
         pos_table_number_required: settings.pos_table_number_required ?? false,
+        staff_live_orders_tab_enabled: settings.staff_live_orders_tab_enabled ?? true,
+        staff_wastage_tab_enabled: settings.staff_wastage_tab_enabled ?? true,
+        staff_stocktake_tab_enabled: settings.staff_stocktake_tab_enabled ?? false,
         // Credentials never come back from the server — always blank on load
         payment_api_key: '',
         payment_api_secret: '',
@@ -706,6 +714,61 @@ export default function SettingsPage() {
           <Switch
             checked={form.pos_table_number_required}
             onCheckedChange={v => updateField('pos_table_number_required', v)}
+          />
+        </div>
+      </section>
+
+      {/* Staff app navigation — which tabs the Staff PWA's bottom bar shows.
+          A phone bar holds five, so a restaurant should spend them on what it
+          actually uses. Turning a tab off hides it for this restaurant only;
+          the feature, its history and its reporting all keep working. */}
+      <section className="bg-card border border-border rounded-xl p-6 space-y-4">
+        <h3 className="font-semibold text-foreground">Staff App Navigation</h3>
+        <p className="text-sm text-muted-foreground">
+          Which tabs your staff see at the bottom of the Staff app. Turning one off
+          hides the tab for your restaurant — it does not switch the feature off, and
+          nothing already recorded is lost.
+        </p>
+
+        <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+          <div>
+            <Label>Live Orders</Label>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Incoming WhatsApp orders. A till sale is already paid and completed when
+              it is rung up, so a till-only restaurant has nothing to watch here.
+            </p>
+          </div>
+          <Switch
+            checked={form.staff_live_orders_tab_enabled}
+            onCheckedChange={v => updateField('staff_live_orders_tab_enabled', v)}
+          />
+        </div>
+
+        <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+          <div>
+            <Label>Wastage</Label>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Quick capture of anything thrown away. Staff can still reach it directly
+              while the tab is hidden, and your wastage reports are unaffected.
+            </p>
+          </div>
+          <Switch
+            checked={form.staff_wastage_tab_enabled}
+            onCheckedChange={v => updateField('staff_wastage_tab_enabled', v)}
+          />
+        </div>
+
+        <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+          <div>
+            <Label>Stocktake</Label>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Lets staff start and enter a count from their phone. Needs stock tracking
+              to be switched on for your restaurant.
+            </p>
+          </div>
+          <Switch
+            checked={form.staff_stocktake_tab_enabled}
+            onCheckedChange={v => updateField('staff_stocktake_tab_enabled', v)}
           />
         </div>
       </section>

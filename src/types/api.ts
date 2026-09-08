@@ -338,6 +338,15 @@ export interface BusinessSettings {
   pos_direct_eft_enabled: boolean;
   pos_other_payment_enabled: boolean;
   pos_table_number_required: boolean;
+  // Staff app navigation — which tabs this tenant's bottom bar shows. These
+  // hide tabs only; the underlying features and their APIs are untouched.
+  staff_live_orders_tab_enabled: boolean;
+  staff_wastage_tab_enabled: boolean;
+  staff_stocktake_tab_enabled: boolean;
+  // How often a count is expected. Guidance and overdue-flagging only — it
+  // never blocks staff from starting one.
+  stocktake_frequency: 'DAILY_1' | 'DAILY_2' | 'DAILY_3' | 'DAILY_4' | 'CUSTOM';
+  stocktake_times_json: string[] | null;
 }
 
 // WhatsApp pause/busy toggle
@@ -394,4 +403,21 @@ export interface TillSession {
   cash_refunds_cents?: number | null;
   opened_at: string;
   closed_at: string | null;
+}
+
+/**
+ * One past cash-up — GET /v1/business/pos/till/sessions (owner/manager only).
+ * Staff names are resolved server-side so this page needs no user directory.
+ */
+export interface TillSessionHistoryEntry {
+  id: string;
+  status: 'OPEN' | 'CLOSED';
+  opening_float_cents: number;
+  expected_cash_cents: number | null;
+  counted_cash_cents: number | null;
+  variance_cents: number | null;
+  opened_at: string;
+  closed_at: string | null;
+  opened_by_name: string | null;
+  closed_by_name: string | null;
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { formatCurrency } from '@/lib/mappers';
-import type { TillSession } from '@/types/api';
+import type { TillSession, TillSessionHistoryEntry } from '@/types/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -35,6 +35,13 @@ export default function TillPage() {
     queryFn: () => apiClient.get<TillSession | null>('/v1/business/pos/till/current'),
   });
 
+  // Cash-up history. Owner/manager only on the backend too — a variance is a
+  // statement about a named cashier's drawer, not general reading.
+  const { data: history = [] } = useQuery({
+    queryKey: ['till-sessions'],
+    queryFn: () => apiClient.get<TillSessionHistoryEntry[]>('/v1/business/pos/till/sessions'),
+  });
+
   const closeMutation = useMutation({
     mutationFn: (countedCashCents: number) =>
       apiClient.post<TillSession>(`/v1/business/pos/till/${current?.id}/close`, {
@@ -44,6 +51,7 @@ export default function TillPage() {
       setResult(closed);
       setCountedCash('');
       queryClient.invalidateQueries({ queryKey: ['till-current'] });
+      queryClient.invalidateQueries({ queryKey: ['till-sessions'] });
       toast({ title: 'Till closed' });
     },
     onError: (err: Error) => {
@@ -137,6 +145,76 @@ export default function TillPage() {
             <p className="text-sm text-muted-foreground">
               No till is currently open — a cashier opens one from the Staff PWA's Till screen before taking sales.
             </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Cash-up history</CardTitle>
+          <CardDescription>
+            Every till session ever opened. A closed session is never edited — this is
+            the permanent record of who opened the drawer and how the count came out.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          {history.length === 0 ? (
+            <p className="px-6 pb-6 text-sm text-muted-foreground">
+              No till sessions yet.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs uppercase text-muted-foreground">
+                    <th className="px-4 py-3">Opened</th>
+                    <th className="px-4 py-3">Closed</th>
+                    <th className="px-4 py-3">Opened by</th>
+                    <th className="px-4 py-3">Closed by</th>
+                    <th className="px-4 py-3 text-right">Float</th>
+                    <th className="px-4 py-3 text-right">Expected</th>
+                    <th className="px-4 py-3 text-right">Counted</th>
+                    <th className="px-4 py-3 text-right">Variance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((row) => (
+                    <tr key={row.id} className="border-b last:border-0">
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {new Date(row.opened_at).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                        {row.closed_at ? new Date(row.closed_at).toLocaleString() : 'Still open'}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{row.opened_by_name ?? '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{row.closed_by_name ?? '—'}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {formatCurrency(row.opening_float_cents / 100)}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                        {row.expected_cash_cents != null
+                          ? formatCurrency(row.expected_cash_cents / 100)
+                          : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                        {row.counted_cash_cents != null
+                          ? formatCurrency(row.counted_cash_cents / 100)
+                          : '—'}
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-right tabular-nums font-medium ${
+                          (row.variance_cents ?? 0) < 0 ? 'text-destructive' : ''
+                        }`}
+                      >
+                        {row.variance_cents != null
+                          ? `${row.variance_cents >= 0 ? '+' : ''}${formatCurrency(row.variance_cents / 100)}`
+                          : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>
