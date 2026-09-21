@@ -250,6 +250,13 @@ export interface CreateMenuItemRequest {
   requires_preparation?: boolean;
 }
 
+// Matches backend's ItemUpdate schema (routes_menu.py) — every field optional
+// (partial update via exclude_unset), plus `is_active` which only makes
+// sense on an existing item, not at creation time.
+export type UpdateMenuItemRequest = Partial<CreateMenuItemRequest> & {
+  is_active?: boolean;
+};
+
 // Specials — matches backend SpecialResponse
 export interface Special {
   id: string;

@@ -1,8 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import type {
-  MenuAddOn, MenuCategory, MenuItem, CreateMenuItemRequest, MenuOptionGroup, MenuOptionChoice,
-  UploadUrlResponse, RemovableIngredient,
+  MenuAddOn, MenuCategory, MenuItem, CreateMenuItemRequest, UpdateMenuItemRequest,
+  MenuOptionGroup, MenuOptionChoice, UploadUrlResponse, RemovableIngredient,
 } from '@/types/api';
 import { formatCents } from '@/lib/mappers';
 import { Button } from '@/components/ui/button';
@@ -1008,7 +1008,7 @@ function MenuItemForm({
   };
 
   const mutation = useMutation({
-    mutationFn: (data: CreateMenuItemRequest) =>
+    mutationFn: (data: CreateMenuItemRequest | UpdateMenuItemRequest) =>
       item
         ? apiClient.put(`/v1/business/menu/items/${item.id}`, data)
         : apiClient.post('/v1/business/menu/items', data),
@@ -1038,7 +1038,7 @@ function MenuItemForm({
       }
     }
 
-    const payload: Record<string, unknown> = {
+    const payload: CreateMenuItemRequest | UpdateMenuItemRequest = {
       name,
       description: description || undefined,
       price_cents: parsePriceInput(priceCents),
@@ -1052,9 +1052,9 @@ function MenuItemForm({
         : null,
       requires_preparation: requiresPreparation,
     };
-    if (item) payload.is_active = isAvailable;
+    if (item) (payload as UpdateMenuItemRequest).is_active = isAvailable;
     if (imageAssetId !== undefined) payload.image_asset_id = imageAssetId;
-    mutation.mutate(payload as CreateMenuItemRequest);
+    mutation.mutate(payload);
   };
 
   return (
