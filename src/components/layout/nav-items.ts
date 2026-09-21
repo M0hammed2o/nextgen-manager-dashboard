@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3, Bike, Boxes, ChefHat, ClipboardCheck, CreditCard, Download,
   FileUp, LayoutDashboard, Package, Receipt, Rocket, Settings, ShoppingCart,
-  Sparkles, TrendingDown, Users, UtensilsCrossed, Wallet,
+  Sparkles, Trash, TrendingDown, Users, UtensilsCrossed, Wallet,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -41,6 +41,7 @@ export const navItems: NavItem[] = [
   { to: '/stock', icon: Boxes, label: 'Stock', requiresInventory: true },
   { to: '/stocktake', icon: ClipboardCheck, label: 'Stocktake', requiresInventory: true },
   { to: '/variance', icon: TrendingDown, label: 'Variance', requiresInventory: true },
+  { to: '/wastage', icon: Trash, label: 'Wastage', requiresInventory: true },
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
   { to: '/settings', icon: Settings, label: 'Settings' },
   { to: '/settings/receipts', icon: Receipt, label: 'Receipts' },
