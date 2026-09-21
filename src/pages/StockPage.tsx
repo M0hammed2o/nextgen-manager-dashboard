@@ -7,10 +7,13 @@ import type { Ingredient, StockMovement } from '@/types/inventory';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PageSkeleton } from '@/components/shared/PageComponents';
-import { Loader2, Truck, Plus, Trash2, AlertTriangle, X } from 'lucide-react';
+import { Loader2, Truck, Plus, Trash2, AlertTriangle, X, Scale } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { unitOptionsFor, defaultUnitFor } from '@/lib/stocktake-units';
+import { buildAdjustmentPayload, type AdjustmentDirection, type AdjustmentPayload } from '@/lib/stock-adjustment';
 
 interface LiveStockRow {
   ingredient_id: string;
@@ -66,6 +69,17 @@ export default function StockPage() {
   const [showReceiving, setShowReceiving] = useState(false);
   const [drillDown, setDrillDown] = useState<LiveStockRow | null>(null);
   const [attentionOnly, setAttentionOnly] = useState(false);
+
+  // Manual adjustment — the one movement type with no delivery note or sale
+  // behind it, so OWNER/MANAGER-only and always audited server-side (see
+  // src/lib/stock-adjustment.ts and routes_inventory.py::create_adjustment).
+  const [showAdjust, setShowAdjust] = useState(false);
+  const [adjIngredientId, setAdjIngredientId] = useState('');
+  const [adjDirection, setAdjDirection] = useState<AdjustmentDirection>('ADD');
+  const [adjQuantity, setAdjQuantity] = useState('');
+  const [adjUnit, setAdjUnit] = useState('');
+  const [adjReason, setAdjReason] = useState('');
+  const [adjError, setAdjError] = useState<string | null>(null);
 
   // Delivery-sales freshness. Without this, a manager looking at expected
   // stock has no way to know whether today's Uber/Mr D sales are included —
@@ -125,6 +139,49 @@ export default function StockPage() {
       toast({ title: 'Could not record that', description: err.message, variant: 'destructive' }),
   });
 
+  const selectedAdjIngredient = (ingredients ?? []).find((i) => i.id === adjIngredientId) ?? null;
+
+  function selectAdjIngredient(id: string) {
+    setAdjIngredientId(id);
+    const ing = (ingredients ?? []).find((i) => i.id === id);
+    setAdjUnit(ing ? defaultUnitFor(ing.canonical_unit, ing.unit_label) : '');
+  }
+
+  const adjustMutation = useMutation({
+    mutationFn: (payload: AdjustmentPayload) =>
+      apiClient.post<{ display: string }>('/v1/business/inventory/adjustments', payload),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['live-stock'] });
+      queryClient.invalidateQueries({ queryKey: ['ingredients'] });
+      setAdjIngredientId('');
+      setAdjDirection('ADD');
+      setAdjQuantity('');
+      setAdjUnit('');
+      setAdjReason('');
+      setAdjError(null);
+      setShowAdjust(false);
+      toast({ title: 'Stock adjusted', description: `Now expected: ${result.display}` });
+    },
+    onError: (err: Error) =>
+      toast({ title: 'Could not adjust stock', description: err.message, variant: 'destructive' }),
+  });
+
+  function submitAdjustment() {
+    const { payload, error: validationError } = buildAdjustmentPayload({
+      ingredientId: adjIngredientId,
+      direction: adjDirection,
+      quantity: adjQuantity,
+      unit: adjUnit,
+      reason: adjReason,
+    });
+    if (!payload) {
+      setAdjError(validationError);
+      return;
+    }
+    setAdjError(null);
+    adjustMutation.mutate(payload);
+  }
+
   if (isLoading) return <PageSkeleton />;
 
   if (error) {
@@ -164,10 +221,16 @@ export default function StockPage() {
             What you should have, based on what you have sold. {live?.period_label}.
           </p>
         </div>
-        <Button variant={showReceiving ? 'outline' : 'default'} onClick={() => setShowReceiving((v) => !v)}>
-          <Truck className="mr-2 h-4 w-4" />
-          {showReceiving ? 'Close' : 'Record a delivery'}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant={showReceiving ? 'outline' : 'default'} onClick={() => { setShowReceiving((v) => !v); setShowAdjust(false); }}>
+            <Truck className="mr-2 h-4 w-4" />
+            {showReceiving ? 'Close' : 'Record a delivery'}
+          </Button>
+          <Button variant={showAdjust ? 'outline' : 'default'} onClick={() => { setShowAdjust((v) => !v); setShowReceiving(false); }}>
+            <Scale className="mr-2 h-4 w-4" />
+            {showAdjust ? 'Close' : 'Adjust stock'}
+          </Button>
+        </div>
       </div>
 
       {externalStatus?.any_stale && (
@@ -305,6 +368,89 @@ export default function StockPage() {
                 </Button>
               )}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {showAdjust && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Adjust stock</CardTitle>
+            <CardDescription>
+              For a correction with no delivery note or sale behind it — a miscount, breakage you're
+              not logging separately, or fixing a mistake. Always audited, and always needs a reason.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr_1fr]">
+              <div>
+                <Label htmlFor="adj-ingredient">Ingredient</Label>
+                <select
+                  id="adj-ingredient"
+                  value={adjIngredientId}
+                  onChange={(e) => selectAdjIngredient(e.target.value)}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">Choose ingredient…</option>
+                  {(ingredients ?? []).map((i) => (
+                    <option key={i.id} value={i.id}>{i.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="adj-direction">Direction</Label>
+                <select
+                  id="adj-direction"
+                  value={adjDirection}
+                  onChange={(e) => setAdjDirection(e.target.value as AdjustmentDirection)}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="ADD">Add stock</option>
+                  <option value="REMOVE">Remove stock</option>
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="adj-quantity">Quantity</Label>
+                <Input
+                  id="adj-quantity"
+                  value={adjQuantity}
+                  onChange={(e) => setAdjQuantity(e.target.value)}
+                  placeholder="How many"
+                  inputMode="decimal"
+                />
+              </div>
+              <div>
+                <Label htmlFor="adj-unit">Unit</Label>
+                <select
+                  id="adj-unit"
+                  value={adjUnit}
+                  onChange={(e) => setAdjUnit(e.target.value)}
+                  disabled={!selectedAdjIngredient}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  {!selectedAdjIngredient && <option value="">—</option>}
+                  {selectedAdjIngredient &&
+                    unitOptionsFor(selectedAdjIngredient.canonical_unit, selectedAdjIngredient.unit_label).map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="adj-reason">Reason (required)</Label>
+              <Textarea
+                id="adj-reason"
+                value={adjReason}
+                onChange={(e) => setAdjReason(e.target.value)}
+                placeholder="e.g. Recounted after a suspected miscount on Tuesday"
+                rows={2}
+              />
+            </div>
+            {adjError && <p className="text-sm text-destructive">{adjError}</p>}
+            <Button onClick={submitAdjustment} disabled={adjustMutation.isPending}>
+              {adjustMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save adjustment
+            </Button>
           </CardContent>
         </Card>
       )}
