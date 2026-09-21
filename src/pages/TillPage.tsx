@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { PageSkeleton } from '@/components/shared/PageComponents';
+import { PageSkeleton, ErrorState } from '@/components/shared/PageComponents';
 import { Loader2, Wallet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -30,7 +30,7 @@ export default function TillPage() {
   const [countedCash, setCountedCash] = useState('');
   const [result, setResult] = useState<TillSession | null>(null);
 
-  const { data: current, isLoading } = useQuery({
+  const { data: current, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['till-current'],
     queryFn: () => apiClient.get<TillSession | null>('/v1/business/pos/till/current'),
   });
@@ -69,6 +69,20 @@ export default function TillPage() {
   }
 
   if (isLoading) return <PageSkeleton />;
+
+  // current === undefined here means the fetch never returned a value at
+  // all (as opposed to a successful `null`, meaning "no till open") — don't
+  // let that read as "No till open", which a manager could misread as
+  // nothing needing attention.
+  if (isError && current === undefined) {
+    return (
+      <ErrorState
+        message={error instanceof Error ? error.message : undefined}
+        onRetry={() => refetch()}
+        isRetrying={isFetching}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">

@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { mapAnalyticsSummary, formatCurrency } from '@/lib/mappers';
 import type { AnalyticsSummaryRaw, Order, PaginatedResponse } from '@/types/api';
-import { StatCard, PageSkeleton, EmptyState } from '@/components/shared/PageComponents';
+import { StatCard, PageSkeleton, EmptyState, ErrorState, InlineErrorBanner } from '@/components/shared/PageComponents';
 import {
   ShoppingCart, CheckCircle, XCircle, DollarSign,
   MessageSquare, Cpu, Users, ArrowRight, Plus, Clock
@@ -17,7 +17,7 @@ type Period = 'today' | '7d' | '30d';
 export default function DashboardPage() {
   const [period, setPeriod] = useState<Period>('today');
 
-  const { data: rawSummary, isLoading } = useQuery({
+  const { data: rawSummary, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['analytics-summary', period],
     queryFn: () => apiClient.get<AnalyticsSummaryRaw>(`/v1/business/analytics/summary?period=${period}`),
     refetchInterval: 30000,
@@ -31,11 +31,29 @@ export default function DashboardPage() {
 
   if (isLoading) return <PageSkeleton />;
 
+  // Distinct from "no data yet" — a failed initial load must not render the
+  // same all-zeros dashboard a genuinely new/empty business would see.
+  if (isError && !rawSummary) {
+    return (
+      <ErrorState
+        message={error instanceof Error ? error.message : undefined}
+        onRetry={() => refetch()}
+        isRetrying={isFetching}
+      />
+    );
+  }
+
   const summary = mapAnalyticsSummary(rawSummary);
   const orders = liveOrdersRes?.data ?? [];
 
   return (
     <div className="space-y-6">
+      {isError && rawSummary && (
+        <InlineErrorBanner
+          message={error instanceof Error ? error.message : undefined}
+          onRetry={() => refetch()}
+        />
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>

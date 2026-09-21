@@ -87,7 +87,7 @@ export default function StocktakePage() {
     scheduleMutation.mutate({ stocktake_frequency: frequency, stocktake_times_json: null });
   }
 
-  const { data: current, isLoading, error } = useQuery({
+  const { data: current, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['stocktake-current'],
     queryFn: () => apiClient.get<Stocktake | null>('/v1/business/stocktake/current'),
   });
@@ -176,7 +176,15 @@ export default function StocktakePage() {
         </div>
       );
     }
-    return <p className="text-sm text-destructive">Could not load: {message}</p>;
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold">Stocktake</h1>
+        <p className="text-sm text-destructive">Could not load: {message}</p>
+        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+          {isFetching ? 'Retrying…' : 'Retry'}
+        </Button>
+      </div>
+    );
   }
 
   const uncounted = current?.lines.filter((l) => l.counted_quantity_milli === null).length ?? 0;

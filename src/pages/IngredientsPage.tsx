@@ -110,7 +110,7 @@ export default function IngredientsPage() {
     });
   }
 
-  const { data: ingredients, isLoading, error } = useQuery({
+  const { data: ingredients, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['ingredients'],
     queryFn: () => apiClient.get<Ingredient[]>('/v1/business/inventory/ingredients'),
   });
@@ -217,7 +217,15 @@ export default function IngredientsPage() {
         </div>
       );
     }
-    return <p className="text-sm text-destructive">Could not load ingredients: {message}</p>;
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold">Ingredients</h1>
+        <p className="text-sm text-destructive">Could not load ingredients: {message}</p>
+        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+          {isFetching ? 'Retrying…' : 'Retry'}
+        </Button>
+      </div>
+    );
   }
 
   const list = ingredients ?? [];

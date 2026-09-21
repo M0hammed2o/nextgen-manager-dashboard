@@ -81,7 +81,7 @@ export default function StockPage() {
       }>('/v1/business/external-orders/status'),
   });
 
-  const { data: live, isLoading, error } = useQuery({
+  const { data: live, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['live-stock'],
     queryFn: () => apiClient.get<LiveStock>('/v1/business/setup/live-stock'),
   });
@@ -142,7 +142,15 @@ export default function StockPage() {
         </div>
       );
     }
-    return <p className="text-sm text-destructive">Could not load stock: {message}</p>;
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold">Stock</h1>
+        <p className="text-sm text-destructive">Could not load stock: {message}</p>
+        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+          {isFetching ? 'Retrying…' : 'Retry'}
+        </Button>
+      </div>
+    );
   }
 
   const rows = (live?.rows ?? []).filter((r) => !attentionOnly || r.needs_attention);

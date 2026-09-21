@@ -71,7 +71,7 @@ export default function RecipesPage() {
   const [copyFrom, setCopyFrom] = useState('');
   const [copyTo, setCopyTo] = useState('');
 
-  const { data: recipes, isLoading, error } = useQuery({
+  const { data: recipes, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['recipes'],
     queryFn: () => apiClient.get<Recipe[]>('/v1/business/recipes'),
   });
@@ -208,7 +208,15 @@ export default function RecipesPage() {
         </div>
       );
     }
-    return <p className="text-sm text-destructive">Could not load recipes: {message}</p>;
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold">Recipes</h1>
+        <p className="text-sm text-destructive">Could not load recipes: {message}</p>
+        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+          {isFetching ? 'Retrying…' : 'Retry'}
+        </Button>
+      </div>
+    );
   }
 
   const itemsWithRecipes = new Set((recipes ?? []).map((r) => r.menu_item_id));
