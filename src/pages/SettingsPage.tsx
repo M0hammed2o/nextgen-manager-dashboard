@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api-client';
+import { apiClient, API_BASE_URL } from '@/lib/api-client';
 import type { BusinessSettings, UploadUrlResponse } from '@/types/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -593,7 +593,7 @@ export default function SettingsPage() {
                         : `Paste this into your ${form.payment_provider} dashboard under Webhooks:`}
                     </p>
                     <code className="block break-all text-foreground">
-                      {`https://nextgen-api.onrender.com/v1/payments/webhooks/${form.payment_provider.toLowerCase()}/${settings.id}`}
+                      {`${API_BASE_URL}/v1/payments/webhooks/${form.payment_provider.toLowerCase()}/${settings.id}`}
                     </code>
                   </div>
                 )}
