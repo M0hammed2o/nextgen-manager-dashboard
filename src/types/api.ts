@@ -347,6 +347,12 @@ export interface BusinessSettings {
   // never blocks staff from starting one.
   stocktake_frequency: 'DAILY_1' | 'DAILY_2' | 'DAILY_3' | 'DAILY_4' | 'CUSTOM';
   stocktake_times_json: string[] | null;
+  // Whether the inventory module (ingredients/recipes/stock/stocktake/
+  // variance) is switched on for this tenant — was missing from this type
+  // even though the backend has always returned it (routes_business.py
+  // BusinessSettingsResponse.inventory_enabled); nothing in the dashboard
+  // could read it until now.
+  inventory_enabled: boolean;
 }
 
 // WhatsApp pause/busy toggle

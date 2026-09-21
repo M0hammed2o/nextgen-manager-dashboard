@@ -1,34 +1,21 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { BarChart3, Bike, Boxes, ChefHat, ChevronLeft, ChevronRight, ClipboardCheck, CreditCard, Download, FileUp, LayoutDashboard, Package, Receipt, Rocket, Settings, ShoppingCart, Sparkles, TrendingDown, Users, UtensilsCrossed, Wallet } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { useBusinessSettings } from '@/hooks/use-business-settings';
+import { navItems } from './nav-items';
 import logoNextgen from '@/assets/logo-nextgen.jpeg';
-
-const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/setup', icon: Rocket, label: 'Setup' },
-  { to: '/orders', icon: ShoppingCart, label: 'Orders' },
-  { to: '/menu', icon: UtensilsCrossed, label: 'Menu' },
-  { to: '/specials', icon: Sparkles, label: 'Specials' },
-  { to: '/staff', icon: Users, label: 'Staff' },
-  { to: '/till', icon: Wallet, label: 'Till' },
-  { to: '/import', icon: FileUp, label: 'Import' },
-  { to: '/delivery-orders', icon: Bike, label: 'Delivery orders' },
-  { to: '/ingredients', icon: Package, label: 'Ingredients' },
-  { to: '/recipes', icon: ChefHat, label: 'Recipes' },
-  { to: '/stock', icon: Boxes, label: 'Stock' },
-  { to: '/stocktake', icon: ClipboardCheck, label: 'Stocktake' },
-  { to: '/variance', icon: TrendingDown, label: 'Variance' },
-  { to: '/analytics', icon: BarChart3, label: 'Analytics' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
-  { to: '/settings/receipts', icon: Receipt, label: 'Receipts' },
-  { to: '/settings/billing', icon: CreditCard, label: 'Billing' },
-  { to: '/exports', icon: Download, label: 'Exports' },
-];
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const { data: settings } = useBusinessSettings();
+
+  // Inventory-only routes stay out of the menu until the module is switched
+  // on for this tenant — see PRODUCT_MAP.md / routes_inventory.py's
+  // _require_inventory_enabled. Hidden (not merely disabled) while settings
+  // are still loading, rather than flashing them on then off.
+  const visibleItems = navItems.filter((item) => !item.requiresInventory || settings?.inventory_enabled);
 
   return (
     <aside
@@ -50,11 +37,11 @@ export function Sidebar() {
         {/* Pick the single longest-matching `to` prefix as active, so a nested
             route like /settings/billing doesn't also light up /settings. */}
         {(() => {
-          const activeTo = navItems
+          const activeTo = visibleItems
             .filter((item) => (item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to)))
             .sort((a, b) => b.to.length - a.to.length)[0]?.to;
 
-          return navItems.map((item) => {
+          return visibleItems.map((item) => {
             const isActive = item.to === activeTo;
             return (
             <NavLink

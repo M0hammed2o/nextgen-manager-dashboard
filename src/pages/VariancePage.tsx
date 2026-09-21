@@ -24,7 +24,7 @@ import { AlertTriangle, ArrowRight, ClipboardCheck, Info } from 'lucide-react';
 export default function VariancePage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const { data: history, isLoading, error } = useQuery({
+  const { data: history, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['stocktake-history'],
     queryFn: () => apiClient.get<StocktakeSummary[]>('/v1/business/stocktake'),
   });
@@ -52,7 +52,15 @@ export default function VariancePage() {
         </div>
       );
     }
-    return <p className="text-sm text-destructive">Could not load: {message}</p>;
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold">Variance</h1>
+        <p className="text-sm text-destructive">Could not load: {message}</p>
+        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+          {isFetching ? 'Retrying…' : 'Retry'}
+        </Button>
+      </div>
+    );
   }
 
   if (approved.length === 0) {
