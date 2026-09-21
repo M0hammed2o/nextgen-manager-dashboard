@@ -105,6 +105,15 @@ export default function StockPage() {
     queryFn: () => apiClient.get<Ingredient[]>('/v1/business/inventory/ingredients'),
   });
 
+  // Cheap reuse of the same coverage check RecipesPage.tsx already shows in
+  // full (item-by-item, with names) — this is deliberately just the count,
+  // as a heads-up that expected stock here may be overstated for reasons
+  // that have nothing to do with a miscount.
+  const { data: recipeCoverage } = useQuery({
+    queryKey: ['recipe-coverage'],
+    queryFn: () => apiClient.get<{ missing: number; incomplete: number }>('/v1/business/setup/recipe-coverage'),
+  });
+
   const { data: movements, isLoading: loadingMovements } = useQuery({
     queryKey: ['movements', drillDown?.ingredient_id],
     queryFn: () =>
@@ -254,6 +263,25 @@ export default function StockPage() {
               </p>
               <Button variant="outline" size="sm" className="mt-2" asChild>
                 <Link to="/delivery-orders">Import delivery orders</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!!recipeCoverage?.missing && (
+        <Card className="border-amber-500/50">
+          <CardContent className="flex items-start gap-3 py-4">
+            <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-amber-500" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium">
+                {recipeCoverage.missing} menu item{recipeCoverage.missing === 1 ? '' : 's'} {recipeCoverage.missing === 1 ? 'has' : 'have'} no recipe
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Selling {recipeCoverage.missing === 1 ? 'it' : 'them'} deducts nothing, so expected stock below may be overstated.
+              </p>
+              <Button variant="outline" size="sm" className="mt-2" asChild>
+                <Link to="/recipes">See which items</Link>
               </Button>
             </div>
           </CardContent>
