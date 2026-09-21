@@ -117,6 +117,8 @@ export interface StocktakeLine {
   ingredient_name: string;
   canonical_unit: CanonicalUnit;
   count_method: CountMethod;
+  /** The noun this ingredient is counted in (e.g. "portion") — null for mass/volume. */
+  unit_label: string | null;
   counted_quantity_milli: number | null;
   counted_display: string | null;
   opening_quantity_milli: number;

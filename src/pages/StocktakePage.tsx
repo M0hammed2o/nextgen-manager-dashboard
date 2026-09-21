@@ -1,12 +1,21 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { formatCurrency } from '@/lib/mappers';
+import { cn } from '@/lib/utils';
 import type { Stocktake, StocktakeSummary } from '@/types/inventory';
 import type { BusinessSettings } from '@/types/api';
+import {
+  unitOptionsFor,
+  buildCountsPayload,
+  seedCountEntries,
+  type CountEntry,
+  type StocktakePayloadLine,
+} from '@/lib/stocktake-units';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PageSkeleton } from '@/components/shared/PageComponents';
 import { Loader2, ClipboardCheck, Lock, AlertTriangle, CalendarClock } from 'lucide-react';
@@ -41,7 +50,8 @@ const FREQUENCY_OPTIONS: { value: string; label: string; hint: string }[] = [
 export default function StocktakePage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [counts, setCounts] = useState<Record<string, string>>({});
+  const [counts, setCounts] = useState<Record<string, CountEntry>>({});
+  const [lineErrors, setLineErrors] = useState<Record<string, string>>({});
   const [customTimes, setCustomTimes] = useState<string>('');
 
   // The count schedule lives with the counts rather than buried in Settings —
@@ -87,6 +97,22 @@ export default function StocktakePage() {
     queryFn: () => apiClient.get<StocktakeSummary[]>('/v1/business/stocktake'),
   });
 
+  // Seed the count inputs once per session — from whatever was last saved on
+  // this draft, in that ingredient's default entry unit (see seedCountEntries
+  // for why that unit specifically). Never overwritten by a later refetch of
+  // the same session, so an in-progress edit can't be clobbered mid-count.
+  useEffect(() => {
+    if (!current) {
+      setCounts({});
+      setLineErrors({});
+      return;
+    }
+    setCounts((prev) => {
+      if (Object.keys(prev).length > 0) return prev;
+      return seedCountEntries(current.lines);
+    });
+  }, [current?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['stocktake-current'] });
     queryClient.invalidateQueries({ queryKey: ['stocktake-history'] });
@@ -100,15 +126,29 @@ export default function StocktakePage() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: () =>
-      apiClient.post<Stocktake>(`/v1/business/stocktake/${current?.id}/counts`, {
-        lines: Object.entries(counts)
-          .filter(([, v]) => v !== '')
-          .map(([ingredient_id, quantity]) => ({ ingredient_id, quantity })),
-      }),
-    onSuccess: () => { refresh(); toast({ title: 'Counts saved' }); },
+    mutationFn: (lines: StocktakePayloadLine[]) =>
+      apiClient.post<Stocktake>(`/v1/business/stocktake/${current?.id}/counts`, { lines }),
+    onSuccess: () => { setLineErrors({}); refresh(); toast({ title: 'Counts saved' }); },
     onError: (e: Error) => toast({ title: 'Could not save', description: e.message, variant: 'destructive' }),
   });
+
+  function handleSave() {
+    const { lines, errors } = buildCountsPayload(counts);
+    setLineErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      toast({
+        title: 'Fix the highlighted counts before saving',
+        description: 'One or more counts have an invalid quantity or no unit chosen.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (lines.length === 0) {
+      toast({ title: 'Enter at least one count first', variant: 'destructive' });
+      return;
+    }
+    saveMutation.mutate(lines);
+  }
 
   const completeMutation = useMutation({
     mutationFn: () => apiClient.post<Stocktake>(`/v1/business/stocktake/${current?.id}/complete`, {}),
@@ -142,6 +182,7 @@ export default function StocktakePage() {
   const uncounted = current?.lines.filter((l) => l.counted_quantity_milli === null).length ?? 0;
   const isDraft = current?.status === 'DRAFT';
   const isCompleted = current?.status === 'COMPLETED';
+  const hasEnteredCounts = Object.values(counts).some((c) => c.quantity.trim() !== '');
 
   return (
     <div className="space-y-6">
@@ -225,8 +266,8 @@ export default function StocktakePage() {
                   <>
                     <Button
                       variant="outline"
-                      onClick={() => saveMutation.mutate()}
-                      disabled={saveMutation.isPending || Object.keys(counts).length === 0}
+                      onClick={handleSave}
+                      disabled={saveMutation.isPending || !hasEnteredCounts}
                     >
                       {saveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                       Save counts
@@ -274,7 +315,14 @@ export default function StocktakePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {current.lines.map((line) => (
+                    {current.lines.map((line) => {
+                      const entry = counts[line.ingredient_id] ?? {
+                        quantity: '',
+                        unit: unitOptionsFor(line.canonical_unit, line.unit_label)[0].value,
+                      };
+                      const options = unitOptionsFor(line.canonical_unit, line.unit_label);
+                      const lineError = lineErrors[line.ingredient_id];
+                      return (
                       <tr
                         key={line.ingredient_id}
                         className={`border-b last:border-0 ${line.is_flagged ? 'bg-destructive/5' : ''}`}
@@ -292,14 +340,57 @@ export default function StocktakePage() {
                         </td>
                         <td className="px-3 py-2">
                           {isDraft ? (
-                            <Input
-                              value={counts[line.ingredient_id] ?? ''}
-                              onChange={(e) =>
-                                setCounts({ ...counts, [line.ingredient_id]: e.target.value })
-                              }
-                              placeholder={line.counted_display ?? '—'}
-                              className="h-9 w-28"
-                            />
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-1">
+                                <Input
+                                  type="number"
+                                  inputMode="decimal"
+                                  min="0"
+                                  step="any"
+                                  value={entry.quantity}
+                                  onChange={(e) => {
+                                    setCounts({
+                                      ...counts,
+                                      [line.ingredient_id]: { ...entry, quantity: e.target.value },
+                                    });
+                                    if (lineError) {
+                                      setLineErrors((prev) => {
+                                        const next = { ...prev };
+                                        delete next[line.ingredient_id];
+                                        return next;
+                                      });
+                                    }
+                                  }}
+                                  placeholder={line.counted_display ?? '—'}
+                                  className={cn(
+                                    'h-9 w-20',
+                                    lineError && 'border-destructive focus-visible:ring-destructive'
+                                  )}
+                                />
+                                {options.length > 1 ? (
+                                  <Select
+                                    value={entry.unit}
+                                    onValueChange={(unit) =>
+                                      setCounts({ ...counts, [line.ingredient_id]: { ...entry, unit } })
+                                    }
+                                  >
+                                    <SelectTrigger className="h-9 w-16 px-2 text-xs">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {options.map((o) => (
+                                        <SelectItem key={o.value} value={o.value}>
+                                          {o.label}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">{options[0].label}</span>
+                                )}
+                              </div>
+                              {lineError && <span className="text-xs text-destructive">{lineError}</span>}
+                            </div>
                           ) : (
                             <span className="tabular-nums">{line.counted_display ?? '—'}</span>
                           )}
@@ -330,7 +421,8 @@ export default function StocktakePage() {
                           {formatCurrency(line.variance_value_cents / 100)}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
