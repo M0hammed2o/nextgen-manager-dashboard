@@ -176,6 +176,41 @@ class ApiClient {
     return data as T;
   }
 
+  /**
+   * GET a binary response (e.g. the commercial invoice PDF) with the auth
+   * header attached, returning a Blob the caller can save via a temporary
+   * object URL. Deliberately never puts the access token in the URL/query
+   * string — some backends log full request URLs, which would leak the
+   * token into logs; the Authorization header does not have this problem.
+   */
+  async getBlob(path: string): Promise<Blob> {
+    const token = this.getAccessToken();
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    let res = await fetch(`${this.baseUrl}${path}`, { headers });
+
+    if (res.status === 401 && token) {
+      const refreshed = await this.refreshAccessToken();
+      if (refreshed) {
+        headers['Authorization'] = `Bearer ${this.getAccessToken()}`;
+        res = await fetch(`${this.baseUrl}${path}`, { headers });
+      } else {
+        this.clearTokens();
+        window.location.href = '/login';
+        throw new Error('Session expired');
+      }
+    }
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      const msg = body?.error?.message || body?.detail || body?.message || `Request failed (${res.status})`;
+      throw new ApiError(msg, res.status, body?.error?.code);
+    }
+
+    return res.blob();
+  }
+
   async uploadFile(uploadUrl: string, file: File): Promise<void> {
     const res = await fetch(uploadUrl, {
       method: 'PUT',

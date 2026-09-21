@@ -408,6 +408,42 @@ export interface PortalSessionResponse {
   supported: boolean;
 }
 
+// ── Wave 0A — commercial account status + EFT/cash invoices (matches
+//    backend/app/api/v1/routes_billing.py AccountStatusResponse /
+//    CommercialInvoiceCustomerResponse). Distinct from the self-service
+//    Stripe/PayFast BillingStatus above. ──
+export type AccountStatusValue =
+  | 'TRIAL' | 'ACTIVE' | 'PAYMENT_DUE' | 'OVERDUE' | 'EXPIRED' | 'SUSPENDED' | 'CANCELLED';
+
+// backend/app/billing/account_status.py's ALERT_* constants.
+export type AccountAlertCode =
+  | 'TRIAL_ENDS_7D' | 'TRIAL_ENDS_3D' | 'TRIAL_ENDS_1D' | 'TRIAL_EXPIRED'
+  | 'INVOICE_OVERDUE' | 'PAYMENT_AWAITING' | 'SUSPENDED';
+
+export interface AccountStatus {
+  status: AccountStatusValue;
+  plan: string;
+  billing_status: string;
+  trial_started_at: string | null;
+  trial_ends_at: string | null;
+  trial_days_remaining: number | null;
+  alerts: AccountAlertCode[];
+}
+
+export interface CommercialInvoice {
+  id: string;
+  invoice_number: string | null;
+  status: string;
+  invoice_date: string | null;
+  due_date: string | null;
+  currency: string;
+  subtotal_cents: number;
+  vat_cents: number;
+  total_cents: number;
+  payment_method: string | null;
+  paid_at: string | null;
+}
+
 // Matches the Staff PWA's identical type (nextgen-staff-ops-main/src/types/index.ts)
 // -- same backend routes (`/business/pos/till/*`), same response shape.
 export interface TillSession {
