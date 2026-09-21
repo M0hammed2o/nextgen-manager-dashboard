@@ -20,6 +20,14 @@ export interface Ingredient {
   sku: string | null;
   canonical_unit: CanonicalUnit;
   count_method: CountMethod;
+  // Present on the backend response (routes_inventory.py IngredientResponse)
+  // but missing from this type until now — several pages were already
+  // reading these two fields off values typed as `Ingredient` (a real gap
+  // masked only because the plain `npx tsc --noEmit` invocation in this
+  // repo checks zero files; `npx tsc --noEmit -p tsconfig.app.json` is the
+  // command that actually type-checks src/, see WORKLOG.md).
+  unit_label: string | null;
+  category: string | null;
   purchase_unit_name: string | null;
   purchase_pack_milli: number;
   cost_per_pack_cents: number | null;
