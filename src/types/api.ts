@@ -104,7 +104,19 @@ export interface OrderItem {
   special_instructions: string | null;
 }
 
-export type PaymentStatus = 'UNPAID' | 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED' | 'CASH_ON_COLLECTION';
+// Backend Order.payment_status — the full set the model actually writes
+// (shared/enums.py / routes_pos.py / routes_orders.py), not just the subset
+// a normal WhatsApp/manual order lifecycle touches. VOIDED/PARTIALLY_REFUNDED
+// only ever appear after a manager reversal (see OrderReversalPanel).
+export type PaymentStatus =
+  | 'UNPAID'
+  | 'PENDING'
+  | 'PAID'
+  | 'FAILED'
+  | 'REFUNDED'
+  | 'PARTIALLY_REFUNDED'
+  | 'VOIDED'
+  | 'CASH_ON_COLLECTION';
 
 export interface Order {
   id: string;
@@ -122,6 +134,13 @@ export interface Order {
   delivery_fee_cents: number;
   total_cents: number;
   currency: string;
+  // Set only once a refund/void has actually happened — routes_pos.py's
+  // refund/void endpoints and routes_orders.py's provider refund endpoint
+  // are the only writers. refund_amount_cents is the amount actually
+  // reversed (may be less than total_cents for a partial refund).
+  refund_amount_cents: number | null;
+  refund_reference: string | null;
+  refunded_at: string | null;
   customer_name: string | null;
   phone_number: string | null;
   delivery_address: string | null;

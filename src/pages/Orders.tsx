@@ -3,10 +3,12 @@ import { apiClient } from '@/lib/api-client';
 import { createOrderStream } from '@/lib/sse';
 import type { Order, PaymentStatus, CreateOrderRequest, PaginatedResponse } from '@/types/api';
 import { formatCents, formatDateTime } from '@/lib/mappers';
+import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PageSkeleton, EmptyState, ErrorState, InlineErrorBanner } from '@/components/shared/PageComponents';
+import OrderReversalPanel from '@/components/orders/OrderReversalPanel';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger
 } from '@/components/ui/dialog';
@@ -35,6 +37,8 @@ const paymentColors: Record<PaymentStatus, string> = {
   PAID: 'bg-success/10 text-[hsl(var(--success))] border border-success/30',
   FAILED: 'bg-destructive/10 text-destructive border border-destructive/30',
   REFUNDED: 'bg-muted text-muted-foreground border border-border',
+  PARTIALLY_REFUNDED: 'bg-warning/10 text-warning border border-warning/30',
+  VOIDED: 'bg-destructive/10 text-destructive border border-destructive/30',
   CASH_ON_COLLECTION: 'bg-muted text-muted-foreground border border-border',
 };
 
@@ -44,6 +48,8 @@ const paymentLabels: Record<PaymentStatus, string> = {
   PAID: 'Paid',
   FAILED: 'Payment Failed',
   REFUNDED: 'Refunded',
+  PARTIALLY_REFUNDED: 'Partially Refunded',
+  VOIDED: 'Voided',
   CASH_ON_COLLECTION: 'Cash',
 };
 
@@ -71,6 +77,7 @@ function playNewOrderSound() {
 
 export default function OrdersPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<string>('live');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -382,6 +389,23 @@ export default function OrdersPage() {
                   </Button>
                 </div>
               )}
+
+              <OrderReversalPanel
+                order={selectedOrder}
+                role={user?.role ?? ''}
+                onDone={() => {
+                  // Same pattern as the Mark as Paid / Cash on Collection
+                  // actions above: close the drawer rather than try to patch
+                  // its stale copy of `selectedOrder` in place. A void also
+                  // moves the order out of the "Live Orders" filter (status
+                  // becomes CANCELLED), so the freshly invalidated list may
+                  // not even still contain this order under the current
+                  // filter — closing avoids showing a drawer whose contents
+                  // no longer match any row on screen.
+                  queryClient.invalidateQueries({ queryKey: ['orders'] });
+                  setSelectedOrder(null);
+                }}
+              />
             </div>
           )}
         </DialogContent>
