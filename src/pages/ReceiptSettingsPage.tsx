@@ -148,6 +148,11 @@ export default function ReceiptSettingsPage() {
     }
   }
 
+  // A VAT-registered business must have a rate above 0% — 0%/empty would
+  // save (and print) a "TAX INVOICE" that charges no VAT at all.
+  const vatRateInvalid =
+    form.vat_registered && !(parseFloat(form.vat_rate_percent || '0') > 0);
+
   const saveMutation = useMutation({
     mutationFn: () =>
       apiClient.put('/v1/business/settings', {
@@ -254,7 +259,20 @@ export default function ReceiptSettingsPage() {
         <CardContent className="space-y-4">
           <label className="flex items-center gap-3">
             <input type="checkbox" checked={form.vat_registered}
-              onChange={(e) => setForm({ ...form, vat_registered: e.target.checked })}
+              onChange={(e) => {
+                const registered = e.target.checked;
+                // Turning VAT registration ON with the rate still at 0/empty
+                // would otherwise silently save (and print) a "TAX INVOICE"
+                // with 0% VAT charged on every sale — default to the
+                // standard South African rate instead of leaving that trap.
+                const currentRate = parseFloat(form.vat_rate_percent || '0');
+                const needsDefault = registered && (!Number.isFinite(currentRate) || currentRate <= 0);
+                setForm({
+                  ...form,
+                  vat_registered: registered,
+                  vat_rate_percent: needsDefault ? '15' : form.vat_rate_percent,
+                });
+              }}
               className="h-4 w-4" />
             <span className="text-sm font-medium">This business is VAT registered</span>
           </label>
@@ -270,7 +288,14 @@ export default function ReceiptSettingsPage() {
               <div>
                 <Label htmlFor="vatrate">VAT rate (%)</Label>
                 <Input id="vatrate" value={form.vat_rate_percent}
+                  aria-invalid={vatRateInvalid}
                   onChange={(e) => setForm({ ...form, vat_rate_percent: e.target.value })} />
+                {vatRateInvalid && (
+                  <p className="mt-1 text-xs font-medium text-destructive">
+                    Enter a VAT rate above 0% — a VAT-registered business can't print a Tax
+                    Invoice showing 0% VAT.
+                  </p>
+                )}
               </div>
               <div>
                 <Label htmlFor="vatmode">Menu prices</Label>
@@ -473,10 +498,20 @@ export default function ReceiptSettingsPage() {
         </Card>
       </div>
 
-      <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
-        {saveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        Save receipt settings
-      </Button>
+      <div>
+        <Button
+          onClick={() => saveMutation.mutate()}
+          disabled={saveMutation.isPending || vatRateInvalid}
+        >
+          {saveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Save receipt settings
+        </Button>
+        {vatRateInvalid && (
+          <p className="mt-2 text-xs font-medium text-destructive">
+            Fix the VAT rate above before saving.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
