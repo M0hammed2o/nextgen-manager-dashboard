@@ -1,11 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { createOrderStream } from '@/lib/sse';
 import type { Order, PaymentStatus, CreateOrderRequest, PaginatedResponse } from '@/types/api';
 import { formatCents, formatDateTime } from '@/lib/mappers';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PageSkeleton, EmptyState } from '@/components/shared/PageComponents';
+import { PageSkeleton, EmptyState, ErrorState, InlineErrorBanner } from '@/components/shared/PageComponents';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger
 } from '@/components/ui/dialog';
@@ -75,10 +76,9 @@ export default function OrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newOrderCount, setNewOrderCount] = useState(0);
-  const sseRef = useRef<EventSource | null>(null);
 
   // ── Data fetching (5 s poll as fallback) ──────────────────────────────────
-  const { data: ordersRes, isLoading } = useQuery({
+  const { data: ordersRes, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['orders', statusFilter],
     queryFn: () => {
       const params = new URLSearchParams();
@@ -92,45 +92,24 @@ export default function OrdersPage() {
 
   const orders = ordersRes?.data ?? [];
 
-  // ── SSE subscription for real-time push ───────────────────────────────────
+  // ── SSE subscription for real-time push (falls back to the 5 s poll above
+  // if the stream can't connect — see src/lib/sse.ts and KNOWN_BUGS.md
+  // BUG-0002/BUG-0027) ────────────────────────────────────────────────────
   useEffect(() => {
-    const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
-    if (!token) return;
-
-    // EventSource doesn't natively support auth headers; use URL param as fallback
-    // Most deployments proxy the auth via cookie or a token query param.
-    // If your setup doesn't support query param auth, the 5 s poll above is the fallback.
-    const url = `/v1/business/orders/live/stream?token=${encodeURIComponent(token)}`;
-    const es = new EventSource(url);
-    sseRef.current = es;
-
-    es.addEventListener('order_update', (e: MessageEvent) => {
-      try {
-        const data = JSON.parse(e.data);
-        if (data.type === 'order_created' || data.type === 'new_order') {
-          playNewOrderSound();
-          setNewOrderCount(n => n + 1);
-          toast({
-            title: `🛎 New Order #${data.order_number}`,
-            description: data.items_summary ?? '',
-          });
-        }
-        // Invalidate to pick up the new/updated order
-        queryClient.invalidateQueries({ queryKey: ['orders'] });
-      } catch {
-        // ignore malformed events
+    const handle = createOrderStream((data: any) => {
+      if (data?.type === 'order_created' || data?.type === 'new_order') {
+        playNewOrderSound();
+        setNewOrderCount(n => n + 1);
+        toast({
+          title: `🛎 New Order #${data.order_number}`,
+          description: data.items_summary ?? '',
+        });
       }
+      // Invalidate to pick up the new/updated order
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
     });
 
-    es.onerror = () => {
-      // SSE failed — polling at 5 s is the fallback, no need to log
-      es.close();
-    };
-
-    return () => {
-      es.close();
-      sseRef.current = null;
-    };
+    return () => handle.close();
   }, []);
 
   // ── Mutations ─────────────────────────────────────────────────────────────
@@ -156,8 +135,24 @@ export default function OrdersPage() {
 
   if (isLoading) return <PageSkeleton />;
 
+  if (isError && orders.length === 0) {
+    return (
+      <ErrorState
+        message={error instanceof Error ? error.message : undefined}
+        onRetry={() => refetch()}
+        isRetrying={isFetching}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {isError && orders.length > 0 && (
+        <InlineErrorBanner
+          message={error instanceof Error ? error.message : undefined}
+          onRetry={() => refetch()}
+        />
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <div>

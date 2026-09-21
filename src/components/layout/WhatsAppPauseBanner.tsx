@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
+import { createOrderStream } from '@/lib/sse';
 import type { WhatsAppStatus } from '@/types/api';
 import { PauseCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,13 +9,13 @@ import { Button } from '@/components/ui/button';
  * Persistent "WhatsApp ordering paused" banner — lives in DashboardLayout so
  * it's visible on every page, not just Orders. Subscribes to the same SSE
  * stream/channel as order alerts (backend publishes whatsapp_paused /
- * whatsapp_resumed events alongside order events), same pattern as the
- * already-correct SSE listener in Orders.tsx.
+ * whatsapp_resumed events alongside order events), via the shared
+ * `createOrderStream` helper so the URL-building/reconnect logic can't
+ * drift from `Orders.tsx`'s copy (see KNOWN_BUGS.md BUG-0002).
  */
 export function WhatsAppPauseBanner() {
   const [status, setStatus] = useState<WhatsAppStatus | null>(null);
   const [resuming, setResuming] = useState(false);
-  const sseRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     apiClient
@@ -26,44 +27,25 @@ export function WhatsAppPauseBanner() {
   }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
-    if (!token) return;
-
-    const url = `/v1/business/orders/live/stream?token=${encodeURIComponent(token)}`;
-    const es = new EventSource(url);
-    sseRef.current = es;
-
-    es.addEventListener('order_update', (e: MessageEvent) => {
-      try {
-        const data = JSON.parse(e.data);
-        if (data.type === 'whatsapp_paused') {
-          setStatus({
-            paused: true,
-            paused_at: data.at ?? null,
-            paused_by_name: data.paused_by_name ?? null,
-            busy_text: null,
-          });
-        } else if (data.type === 'whatsapp_resumed') {
-          setStatus((prev) => ({
-            paused: false,
-            paused_at: null,
-            paused_by_name: null,
-            busy_text: prev?.busy_text ?? null,
-          }));
-        }
-      } catch {
-        // ignore malformed events
+    const handle = createOrderStream((data: any) => {
+      if (data?.type === 'whatsapp_paused') {
+        setStatus({
+          paused: true,
+          paused_at: data.at ?? null,
+          paused_by_name: data.paused_by_name ?? null,
+          busy_text: null,
+        });
+      } else if (data?.type === 'whatsapp_resumed') {
+        setStatus((prev) => ({
+          paused: false,
+          paused_at: null,
+          paused_by_name: null,
+          busy_text: prev?.busy_text ?? null,
+        }));
       }
     });
 
-    es.onerror = () => {
-      es.close();
-    };
-
-    return () => {
-      es.close();
-      sseRef.current = null;
-    };
+    return () => handle.close();
   }, []);
 
   const handleResume = async () => {

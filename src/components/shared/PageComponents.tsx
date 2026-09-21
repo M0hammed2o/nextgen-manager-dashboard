@@ -1,4 +1,6 @@
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { AlertTriangle } from 'lucide-react';
 
 export function PageSkeleton() {
   return (
@@ -28,6 +30,59 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
       <h3 className="text-lg font-semibold text-foreground mb-1">{title}</h3>
       <p className="text-sm text-muted-foreground mb-4 max-w-md">{description}</p>
       {action}
+    </div>
+  );
+}
+
+interface ErrorStateProps {
+  /** Human-readable message; falls back to a generic sentence if omitted. */
+  message?: string;
+  onRetry: () => void;
+  /** True while a retry is in flight, to disable/label the button. */
+  isRetrying?: boolean;
+}
+
+/**
+ * Distinct-from-empty error state with a Retry action, for a data-driven
+ * page whose initial load failed. Never render the "no data" EmptyState for
+ * a genuine fetch failure — an owner needs to be able to tell "nothing here
+ * yet" apart from "something is broken" (see KNOWN_BUGS.md, Orders page
+ * silent-failure fix).
+ */
+export function ErrorState({ message, onRetry, isRetrying }: ErrorStateProps) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="text-destructive mb-4"><AlertTriangle className="w-12 h-12" /></div>
+      <h3 className="text-lg font-semibold text-foreground mb-1">Couldn't load this page</h3>
+      <p className="text-sm text-muted-foreground mb-4 max-w-md">
+        {message || 'Something went wrong talking to the server. Check your connection and try again.'}
+      </p>
+      <Button onClick={onRetry} disabled={isRetrying}>
+        {isRetrying ? 'Retrying…' : 'Retry'}
+      </Button>
+    </div>
+  );
+}
+
+interface InlineErrorBannerProps {
+  message?: string;
+  onRetry: () => void;
+}
+
+/**
+ * Compact banner for when a page already has data on screen (from a
+ * previous successful load) but the latest background refetch failed —
+ * keeps the stale data visible instead of replacing it with a full-page
+ * ErrorState, while still telling the user the data may be out of date.
+ */
+export function InlineErrorBanner({ message, onRetry }: InlineErrorBannerProps) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm">
+      <div className="flex items-center gap-2 text-destructive">
+        <AlertTriangle className="w-4 h-4 shrink-0" />
+        <span>{message || "Couldn't refresh — showing the last loaded data."}</span>
+      </div>
+      <Button size="sm" variant="outline" onClick={onRetry}>Retry</Button>
     </div>
   );
 }
