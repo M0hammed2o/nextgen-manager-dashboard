@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useBusinessSettings } from '@/hooks/use-business-settings';
-import { navItems } from './nav-items';
+import { navItems, isNavItemVisible } from './nav-items';
 import logoNextgen from '@/assets/logo-nextgen.jpeg';
 
 export function Sidebar() {
@@ -11,11 +11,11 @@ export function Sidebar() {
   const location = useLocation();
   const { data: settings } = useBusinessSettings();
 
-  // Inventory-only routes stay out of the menu until the module is switched
-  // on for this tenant — see PRODUCT_MAP.md / routes_inventory.py's
-  // _require_inventory_enabled. Hidden (not merely disabled) while settings
-  // are still loading, rather than flashing them on then off.
-  const visibleItems = navItems.filter((item) => !item.requiresInventory || settings?.inventory_enabled);
+  // Inventory- and WhatsApp-only routes stay out of the menu until their
+  // module is switched on for this tenant — see PRODUCT_MAP.md /
+  // routes_inventory.py's _require_inventory_enabled and nav-items.ts's
+  // isNavItemVisible for the shared (Sidebar + MobileSidebar) gating rule.
+  const visibleItems = navItems.filter((item) => isNavItemVisible(item, settings));
 
   return (
     <aside

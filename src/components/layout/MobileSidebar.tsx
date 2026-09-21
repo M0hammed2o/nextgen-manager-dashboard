@@ -2,7 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBusinessSettings } from '@/hooks/use-business-settings';
-import { navItems } from './nav-items';
+import { navItems, isNavItemVisible } from './nav-items';
 import logoNextgen from '@/assets/logo-nextgen.jpeg';
 
 interface Props {
@@ -16,9 +16,10 @@ export function MobileSidebar({ open, onClose }: Props) {
 
   if (!open) return null;
 
-  // Same gating as Sidebar.tsx (desktop) — see nav-items.ts for why this is
-  // a single shared list rather than two that can drift apart.
-  const visibleItems = navItems.filter((item) => !item.requiresInventory || settings?.inventory_enabled);
+  // Same gating as Sidebar.tsx (desktop) — see nav-items.ts's
+  // isNavItemVisible for why this is a single shared predicate rather than
+  // two that can drift apart.
+  const visibleItems = navItems.filter((item) => isNavItemVisible(item, settings));
 
   return (
     <div className="fixed inset-0 z-50 md:hidden">

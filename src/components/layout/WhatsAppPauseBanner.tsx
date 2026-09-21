@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
 import { createOrderStream } from '@/lib/sse';
+import { useBusinessSettings } from '@/hooks/use-business-settings';
 import type { WhatsAppStatus } from '@/types/api';
 import { PauseCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,21 +13,29 @@ import { Button } from '@/components/ui/button';
  * whatsapp_resumed events alongside order events), via the shared
  * `createOrderStream` helper so the URL-building/reconnect logic can't
  * drift from `Orders.tsx`'s copy (see KNOWN_BUGS.md BUG-0002).
+ *
+ * Hidden entirely for a POS-only tenant (`is_whatsapp_enabled === false`) —
+ * a WhatsApp pause/resume control makes no sense when the channel itself is
+ * switched off for this business.
  */
 export function WhatsAppPauseBanner() {
+  const { data: settings } = useBusinessSettings();
+  const whatsappEnabled = settings?.is_whatsapp_enabled ?? true;
   const [status, setStatus] = useState<WhatsAppStatus | null>(null);
   const [resuming, setResuming] = useState(false);
 
   useEffect(() => {
+    if (!whatsappEnabled) return;
     apiClient
       .get<WhatsAppStatus>('/v1/business/whatsapp/status')
       .then(setStatus)
       .catch(() => {
         // Non-fatal — banner just won't show until the next SSE event.
       });
-  }, []);
+  }, [whatsappEnabled]);
 
   useEffect(() => {
+    if (!whatsappEnabled) return;
     const handle = createOrderStream((data: any) => {
       if (data?.type === 'whatsapp_paused') {
         setStatus({
@@ -46,7 +55,7 @@ export function WhatsAppPauseBanner() {
     });
 
     return () => handle.close();
-  }, []);
+  }, [whatsappEnabled]);
 
   const handleResume = async () => {
     setResuming(true);
@@ -58,6 +67,7 @@ export function WhatsAppPauseBanner() {
     }
   };
 
+  if (!whatsappEnabled) return null;
   if (!status?.paused) return null;
 
   const pausedTime = status.paused_at

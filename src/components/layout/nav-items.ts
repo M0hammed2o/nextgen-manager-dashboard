@@ -48,3 +48,20 @@ export const navItems: NavItem[] = [
   { to: '/settings/billing', icon: CreditCard, label: 'Billing' },
   { to: '/exports', icon: Download, label: 'Exports' },
 ];
+
+/**
+ * Shared visibility predicate for both `Sidebar.tsx` (desktop) and
+ * `MobileSidebar.tsx` (mobile) — single source of truth so the two filters
+ * can't drift apart (same reasoning as the shared `navItems` list itself).
+ * Hidden (not merely disabled) while `settings` hasn't loaded yet, same as
+ * the pre-existing `requiresInventory` gate, rather than flashing a
+ * module-gated item on then off.
+ */
+export function isNavItemVisible(
+  item: NavItem,
+  settings: { inventory_enabled?: boolean; is_whatsapp_enabled?: boolean } | undefined
+): boolean {
+  if (item.requiresInventory && !settings?.inventory_enabled) return false;
+  if (item.requiresWhatsapp && !settings?.is_whatsapp_enabled) return false;
+  return true;
+}

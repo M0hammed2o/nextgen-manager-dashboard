@@ -343,6 +343,18 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {/* WhatsApp-only settings — Chatbot Messages through Payment Settings
+          below all configure the WhatsApp/online ordering channel (verified
+          against backend usage: order_in_only, delivery/requirement flags,
+          payment_methods_enabled/online_payment_required/payment_provider
+          and the EFT banking details are only read by backend/app/bot/*
+          and order_creator.py — never by routes_pos.py). Hidden for a
+          POS-only tenant (`is_whatsapp_enabled === false`), same
+          hide-not-disable pattern as `requiresInventory` nav items — see
+          KNOWN_BUGS.md. Till (POS) Settings and Staff App Navigation below
+          stay visible regardless, since POS-only businesses still need them. */}
+      {(settings?.is_whatsapp_enabled ?? true) && (
+      <>
       {/* Chatbot */}
       <section className="bg-card border border-border rounded-xl p-6 space-y-4">
         <h3 className="font-semibold text-foreground">Chatbot Messages</h3>
@@ -654,6 +666,8 @@ export default function SettingsPage() {
           </div>
         )}
       </section>
+      </>
+      )}
 
       {/* Till (POS) Settings — distinct from the WhatsApp/online Payment
           Settings above: these control what a cashier sees at the till. */}

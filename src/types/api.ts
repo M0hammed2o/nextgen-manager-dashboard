@@ -360,6 +360,11 @@ export interface BusinessSettings {
   // BusinessSettingsResponse.inventory_enabled); nothing in the dashboard
   // could read it until now.
   inventory_enabled: boolean;
+  // Platform-admin kill switch for the WhatsApp ordering channel (read-only
+  // here — routes_business.py's BusinessSettingsResponse.is_whatsapp_enabled,
+  // defaults true). Used to hide WhatsApp-only UI (pause banner, chatbot/
+  // online-order settings sections) for a POS-only tenant.
+  is_whatsapp_enabled: boolean;
 }
 
 // WhatsApp pause/busy toggle
