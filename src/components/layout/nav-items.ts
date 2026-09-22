@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3, Bike, Boxes, ChefHat, ClipboardCheck, CreditCard, Download,
   FileUp, Gift, LayoutDashboard, MessageCircle, Package, Receipt, Rocket,
-  Settings, ShoppingCart, Sparkles, Trash, TrendingDown, Users, UtensilsCrossed, Wallet,
+  Settings, ShoppingCart, Sparkles, Trash, TrendingDown, Truck, Users, UtensilsCrossed, Wallet,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -13,6 +13,8 @@ export interface NavItem {
   requiresInventory?: boolean;
   /** Hidden unless the business has WhatsApp ordering enabled. */
   requiresWhatsapp?: boolean;
+  /** Hidden unless the business's delivery marketplace module (Uber Eats/Mr D API) is enabled. */
+  requiresDeliveryPlatforms?: boolean;
 }
 
 /**
@@ -36,6 +38,12 @@ export const navItems: NavItem[] = [
   // (routes_external_orders.py never calls _require_inventory_enabled) —
   // it feeds order data regardless of whether stock tracking is on.
   { to: '/delivery-orders', icon: Bike, label: 'Delivery orders' },
+  // Live delivery-marketplace API module (Uber Eats direct order injection,
+  // Mr D file reconciliation) — a DIFFERENT thing from the CSV importer
+  // above, gated on the separate delivery_platforms_enabled entitlement
+  // (migration 0044). Sub-pages (Orders/Menu Mapping) are reachable via
+  // DeliverySubNav inside this page, not separate sidebar entries.
+  { to: '/settings/delivery', icon: Truck, label: 'Delivery Platforms', requiresDeliveryPlatforms: true },
   { to: '/ingredients', icon: Package, label: 'Ingredients', requiresInventory: true },
   { to: '/recipes', icon: ChefHat, label: 'Recipes', requiresInventory: true },
   { to: '/stock', icon: Boxes, label: 'Stock', requiresInventory: true },
@@ -61,9 +69,10 @@ export const navItems: NavItem[] = [
  */
 export function isNavItemVisible(
   item: NavItem,
-  settings: { inventory_enabled?: boolean; is_whatsapp_enabled?: boolean } | undefined
+  settings: { inventory_enabled?: boolean; is_whatsapp_enabled?: boolean; delivery_platforms_enabled?: boolean } | undefined
 ): boolean {
   if (item.requiresInventory && !settings?.inventory_enabled) return false;
   if (item.requiresWhatsapp && !settings?.is_whatsapp_enabled) return false;
+  if (item.requiresDeliveryPlatforms && !settings?.delivery_platforms_enabled) return false;
   return true;
 }

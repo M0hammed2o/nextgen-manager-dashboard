@@ -28,6 +28,9 @@ import ImportPage from '@/pages/ImportPage';
 import VariancePage from '@/pages/VariancePage';
 import WastagePage from '@/pages/WastagePage';
 import ExternalOrdersPage from '@/pages/ExternalOrdersPage';
+import DeliveryPlatformsPage from '@/pages/DeliveryPlatformsPage';
+import DeliveryOrdersPage from '@/pages/DeliveryOrdersPage';
+import DeliveryMappingsPage from '@/pages/DeliveryMappingsPage';
 import ExportsPage from "./pages/ExportsPage";
 import NotFound from "./pages/NotFound";
 
@@ -72,6 +75,9 @@ const App = () => (
                 <Route path="/variance" element={<VariancePage />} />
                 <Route path="/wastage" element={<WastagePage />} />
                 <Route path="/delivery-orders" element={<ExternalOrdersPage />} />
+                <Route path="/settings/delivery" element={<DeliveryPlatformsPage />} />
+                <Route path="/settings/delivery/orders" element={<DeliveryOrdersPage />} />
+                <Route path="/settings/delivery/mappings" element={<DeliveryMappingsPage />} />
                 <Route path="/exports" element={<ExportsPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />

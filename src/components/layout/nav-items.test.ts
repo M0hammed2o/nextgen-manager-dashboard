@@ -47,4 +47,18 @@ describe('isNavItemVisible — WhatsApp/inventory nav gating predicate', () => {
     const gated = navItems.filter((item) => item.requiresWhatsapp);
     expect(gated.map((item) => item.to)).toEqual(['/settings/whatsapp']);
   });
+
+  it('a requiresDeliveryPlatforms item is hidden until delivery_platforms_enabled is true', () => {
+    const deliveryItem: NavItem = {
+      to: '/settings/delivery', icon: navItems[0].icon, label: 'Delivery Platforms', requiresDeliveryPlatforms: true,
+    };
+    expect(isNavItemVisible(deliveryItem, undefined)).toBe(false);
+    expect(isNavItemVisible(deliveryItem, { delivery_platforms_enabled: false })).toBe(false);
+    expect(isNavItemVisible(deliveryItem, { delivery_platforms_enabled: true })).toBe(true);
+  });
+
+  it('the Delivery Platforms nav item is gated on requiresDeliveryPlatforms', () => {
+    const deliveryPlatforms = navItems.find((item) => item.to === '/settings/delivery');
+    expect(deliveryPlatforms?.requiresDeliveryPlatforms).toBe(true);
+  });
 });
