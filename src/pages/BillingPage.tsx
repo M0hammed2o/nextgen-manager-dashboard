@@ -6,14 +6,15 @@ import { useAccountStatus } from '@/hooks/use-account-status';
 import { formatCents, formatDate } from '@/lib/mappers';
 import type {
   BillingStatus, CheckoutSessionResponse, PortalSessionResponse, SelfServicePlan,
-  AccountStatusValue, CommercialInvoice,
+  AccountStatusValue, CommercialInvoice, DigitalReceiptsUsage,
 } from '@/types/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { Skeleton } from '@/components/ui/skeleton';
 import { PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
-import { CreditCard, Download, ExternalLink, FileText, Loader2, ShieldAlert } from 'lucide-react';
+import { CreditCard, Download, ExternalLink, FileText, Loader2, Receipt, ShieldAlert } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const PLANS: { id: SelfServicePlan; name: string; blurb: string }[] = [
@@ -188,6 +189,84 @@ export function PlanAndInvoicesSection({ isOwner }: { isOwner: boolean }) {
   );
 }
 
+/**
+ * "Digital Receipts" metering section — visible to OWNER and MANAGER alike,
+ * matching GET /v1/business/digital-receipts/usage's own owner_or_manager
+ * gate (unlike the invoices table above, which is OWNER-only).
+ *
+ * The entitlement flag itself (Business.digital_receipts_enabled) is not
+ * currently returned by GET /v1/business/settings, so this app cannot show
+ * a real enabled/disabled status the way it does for is_whatsapp_enabled/
+ * inventory_enabled — this is a known backend gap, not something to fake
+ * here. What IS real and shown here is the
+ * usage endpoint's own data. The `INVENTORY_NOT_ENABLED`-style catch below
+ * reuses the exact same defensive pattern already used for the inventory
+ * module (see IngredientsPage.tsx/StockPage.tsx/etc.) so that if the
+ * backend later adds a real gate on this endpoint, this section already
+ * degrades correctly without a frontend change — it simply never fires
+ * today, since the endpoint has no such gate yet.
+ */
+export function DigitalReceiptsSection() {
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+    queryKey: ['digital-receipts-usage'],
+    queryFn: () => apiClient.get<DigitalReceiptsUsage>('/v1/business/digital-receipts/usage'),
+  });
+
+  const message = isError ? ((error as Error)?.message ?? '') : '';
+  const notEnabled = message.includes('DIGITAL_RECEIPTS_NOT_ENABLED') || message.toLowerCase().includes('not enabled');
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Receipt className="w-4 h-4" /> Digital Receipts
+        </CardTitle>
+        <CardDescription>WhatsApp digital receipt usage for your account.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="grid grid-cols-3 gap-3">
+            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
+          </div>
+        ) : notEnabled ? (
+          <EmptyState
+            icon={<Receipt className="w-10 h-10" />}
+            title="Digital receipts are not yet enabled for your account"
+            description="Contact NextGen to add this module."
+          />
+        ) : isError ? (
+          <ErrorState
+            message="Couldn't load your digital receipt usage."
+            onRetry={() => refetch()}
+            isRetrying={isFetching}
+          />
+        ) : (
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground">Receipts requested</p>
+                <p className="text-lg font-semibold text-foreground">{data?.receipts_requested ?? 0}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Sent via WhatsApp</p>
+                <p className="text-lg font-semibold text-foreground">{data?.whatsapp_sent ?? 0}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Failed to send</p>
+                <p className="text-lg font-semibold text-foreground">{data?.whatsapp_failed ?? 0}</p>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground pt-2 border-t border-border">
+              These are lifetime totals for your account, regardless of whether the module is
+              currently switched on.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function BillingPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -246,6 +325,8 @@ export default function BillingPage() {
       </div>
 
       <PlanAndInvoicesSection isOwner={isOwner} />
+
+      <DigitalReceiptsSection />
 
       {isOwner && (
         <>

@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { PlanAndInvoicesSection } from './BillingPage';
-import { apiClient } from '@/lib/api-client';
-import type { AccountStatus, CommercialInvoice } from '@/types/api';
+import { PlanAndInvoicesSection, DigitalReceiptsSection } from './BillingPage';
+import { apiClient, ApiError } from '@/lib/api-client';
+import type { AccountStatus, CommercialInvoice, DigitalReceiptsUsage } from '@/types/api';
 
 vi.mock('@/lib/api-client', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api-client')>('@/lib/api-client');
@@ -91,5 +91,52 @@ describe('PlanAndInvoicesSection — invoice list role gating', () => {
       () => expect(screen.getByText(/couldn't load your account status/i)).toBeInTheDocument(),
       { timeout: 3000 }
     );
+  });
+});
+
+const USAGE: DigitalReceiptsUsage = {
+  receipts_requested: 42,
+  whatsapp_sent: 39,
+  whatsapp_failed: 3,
+};
+
+describe('DigitalReceiptsSection', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('shows the 3 usage numbers from GET /v1/business/digital-receipts/usage on success', async () => {
+    vi.mocked(apiClient.get).mockImplementation((path: string) => {
+      if (path === '/v1/business/digital-receipts/usage') return Promise.resolve(USAGE);
+      return Promise.reject(new Error(`unexpected path ${path}`));
+    });
+
+    renderWithClient(<DigitalReceiptsSection />);
+
+    await waitFor(() => expect(screen.getByText('42')).toBeInTheDocument());
+    expect(screen.getByText('39')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(apiClient.get).toHaveBeenCalledWith('/v1/business/digital-receipts/usage');
+  });
+
+  it('shows a retryable ErrorState (not a blank section) on a genuine fetch failure', async () => {
+    vi.mocked(apiClient.get).mockRejectedValue(new Error('network down'));
+
+    renderWithClient(<DigitalReceiptsSection />);
+
+    await waitFor(() => expect(screen.getByText(/couldn't load your digital receipt usage/i)).toBeInTheDocument());
+  });
+
+  it('shows the "module not enabled" explanation, matching the inventory module\'s pattern, if the backend ever starts gating this endpoint', async () => {
+    vi.mocked(apiClient.get).mockRejectedValue(
+      new ApiError('Digital receipts are not enabled for this business.', 409, 'DIGITAL_RECEIPTS_NOT_ENABLED')
+    );
+
+    renderWithClient(<DigitalReceiptsSection />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/digital receipts are not yet enabled for your account/i)).toBeInTheDocument()
+    );
+    expect(screen.getByText(/contact nextgen to add this module/i)).toBeInTheDocument();
   });
 });

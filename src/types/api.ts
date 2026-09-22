@@ -468,6 +468,31 @@ export interface WhatsAppTestMessageResponse {
   detail: string;
 }
 
+// ── Digital receipts (backend/app/api/v1/routes_receipts.py,
+//    GET /v1/business/digital-receipts/usage) — metering visibility only,
+//    not analytics. The entitlement flag itself (Business.digital_receipts_
+//    enabled) is not currently returned by GET /v1/business/settings (see
+//    BusinessSettingsResponse in routes_business.py) — a backend gap, not
+//    something the frontend can infer from this response. ──
+export interface DigitalReceiptsUsage {
+  receipts_requested: number;
+  whatsapp_sent: number;
+  whatsapp_failed: number;
+}
+
+/** POST /v1/business/orders/{order_id}/receipt/resend */
+export interface ReceiptResendRequest {
+  phone_number?: string;
+}
+
+export interface ReceiptResendResponse {
+  id: string;
+  order_id: string;
+  receipt_url: string;
+  whatsapp_status: string;
+  whatsapp_failure_reason: string | null;
+}
+
 // ── Loyalty (backend/app/api/v1/routes_loyalty.py, prefix /business/loyalty) ──
 export interface LoyaltyProgram {
   is_enabled: boolean;
