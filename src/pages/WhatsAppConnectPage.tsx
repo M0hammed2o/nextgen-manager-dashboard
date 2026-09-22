@@ -3,8 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth';
 import { useBusinessSettings } from '@/hooks/use-business-settings';
+import { formatDateTime } from '@/lib/mappers';
 import type {
-  WhatsAppConnectConfig, WhatsAppConnection, WhatsAppExchangeResponse,
+  WhatsAppConnectConfig, WhatsAppConnection,
   WhatsAppHealthCheckResponse, WhatsAppTestMessageResponse, WhatsAppStatus,
 } from '@/types/api';
 import { Button } from '@/components/ui/button';
@@ -39,11 +40,6 @@ const STATUS_LABEL: Record<WhatsAppConnection['status'], string> = {
   NEEDS_ATTENTION: 'Needs attention',
   DISCONNECTED: 'Disconnected',
 };
-
-function formatDateTime(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
-}
 
 /**
  * Real Meta Embedded Signup handshake, per Meta's WhatsApp Embedded Signup
