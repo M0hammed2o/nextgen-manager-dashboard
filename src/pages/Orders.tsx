@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PageSkeleton, EmptyState, ErrorState, InlineErrorBanner } from '@/components/shared/PageComponents';
 import OrderReversalPanel from '@/components/orders/OrderReversalPanel';
+import ResendReceiptButton from '@/components/orders/ResendReceiptButton';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger
 } from '@/components/ui/dialog';
@@ -389,6 +390,8 @@ export default function OrdersPage() {
                   </Button>
                 </div>
               )}
+
+              <ResendReceiptButton order={selectedOrder} role={user?.role ?? ''} />
 
               <OrderReversalPanel
                 order={selectedOrder}
