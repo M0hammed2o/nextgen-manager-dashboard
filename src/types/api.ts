@@ -458,6 +458,72 @@ export interface WhatsAppTestMessageResponse {
   detail: string;
 }
 
+// ── Loyalty (backend/app/api/v1/routes_loyalty.py, prefix /business/loyalty) ──
+export interface LoyaltyProgram {
+  is_enabled: boolean;
+  points_per_rand: number;
+  points_per_order: number;
+  points_expiry_days: number | null;
+  min_redemption_points: number;
+  silver_tier_points: number;
+  gold_tier_points: number;
+  birthday_reward_points: number | null;
+  referral_reward_points: number | null;
+  double_points_promo_active: boolean;
+  double_points_promo_starts_at: string | null;
+  double_points_promo_ends_at: string | null;
+}
+
+/** PUT body — every field optional, only changed fields need to be sent. */
+export type LoyaltyProgramUpdate = Partial<LoyaltyProgram>;
+
+export interface LoyaltyReward {
+  id: string;
+  name: string;
+  description: string | null;
+  points_cost: number;
+  is_active: boolean;
+}
+
+export interface LoyaltyRewardCreate {
+  name: string;
+  description: string | null;
+  points_cost: number;
+}
+
+export type LoyaltyRewardUpdate = Partial<LoyaltyRewardCreate> & { is_active?: boolean };
+
+export interface CustomerLoyalty {
+  customer_id: string;
+  display_name: string | null;
+  phone_number: string | null;
+  loyalty_points_balance: number;
+  loyalty_tier: string;
+}
+
+/**
+ * POST /redeem body — a customer redeems one catalogue reward (by id), NOT
+ * an arbitrary point amount. There is no "amount" field — see
+ * routes_loyalty.py RedeemRequest.
+ */
+export interface LoyaltyRedeemRequest {
+  customer_id: string;
+  reward_id: string;
+}
+
+/**
+ * POST /redeem response. This ONLY adjusts the customer's points balance —
+ * `redeem_reward()` in backend/app/loyalty/engine.py never touches an
+ * order (order_id is always null on the resulting LoyaltyTransaction). Any
+ * UI built on this response must describe it as recording a points
+ * redemption, never as applying a discount to an order.
+ */
+export interface LoyaltyRedeemResponse {
+  success: boolean;
+  points_delta: number;
+  balance_after: number;
+}
+
 // Assets
 export interface UploadUrlResponse {
   upload_url: string;

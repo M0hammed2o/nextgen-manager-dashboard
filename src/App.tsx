@@ -22,6 +22,7 @@ import StockPage from '@/pages/StockPage';
 import StocktakePage from '@/pages/StocktakePage';
 import ReceiptSettingsPage from '@/pages/ReceiptSettingsPage';
 import WhatsAppConnectPage from '@/pages/WhatsAppConnectPage';
+import LoyaltyPage from '@/pages/LoyaltyPage';
 import SetupPage from '@/pages/SetupPage';
 import ImportPage from '@/pages/ImportPage';
 import VariancePage from '@/pages/VariancePage';
@@ -65,6 +66,7 @@ const App = () => (
                 <Route path="/stocktake" element={<StocktakePage />} />
                 <Route path="/settings/receipts" element={<ReceiptSettingsPage />} />
                 <Route path="/settings/whatsapp" element={<WhatsAppConnectPage />} />
+                <Route path="/loyalty" element={<LoyaltyPage />} />
                 <Route path="/setup" element={<SetupPage />} />
                 <Route path="/import" element={<ImportPage />} />
                 <Route path="/variance" element={<VariancePage />} />
