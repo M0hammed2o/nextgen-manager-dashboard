@@ -384,6 +384,15 @@ export interface BusinessSettings {
   // defaults true). Used to hide WhatsApp-only UI (pause banner, chatbot/
   // online-order settings sections) for a POS-only tenant.
   is_whatsapp_enabled: boolean;
+  // Delivery marketplace entitlements (migration 0044, admin_api commits
+  // ca95867/82e0143) — platform-admin-set, business-plane READ-ONLY (see
+  // admin-suite ModuleTogglesFieldset's superAdminOnly gating). A true value
+  // is commercial permission only — it does NOT mean Uber/Mr D has approved
+  // or connected this restaurant; see DeliveryConnectionResponse.status for
+  // the real live/sandbox/awaiting-approval state.
+  delivery_platforms_enabled: boolean;
+  uber_eats_enabled: boolean;
+  mrd_enabled: boolean;
 }
 
 // WhatsApp pause/busy toggle
@@ -658,4 +667,137 @@ export interface TillSessionHistoryEntry {
   closed_at: string | null;
   opened_by_name: string | null;
   closed_by_name: string | null;
+}
+
+// ── Delivery marketplace (backend/app/api/v1/routes_delivery.py, prefix
+//    /business/delivery) — Uber Eats + Mr D. Types match that module's
+//    Pydantic response schemas field-for-field (read 2026-09-22).
+//
+// HONESTY CONTRACT: `DeliveryConnectionStatus` is commercial-correctness
+// vocabulary, not a generic PENDING/ACTIVE/PAUSED set (see
+// shared/models/delivery.py's DeliveryConnection.status comment) — SANDBOX
+// and AWAITING_APPROVAL must never be presented as "Connected"/live in any
+// UI. Only CONNECTED is a real, live, order-receiving connection. ──
+export type DeliveryProvider = 'UBER_EATS' | 'MR_D';
+
+export type DeliveryConnectionStatus =
+  | 'NOT_CONNECTED' | 'SANDBOX' | 'AWAITING_APPROVAL' | 'CONNECTED'
+  | 'ATTENTION_REQUIRED' | 'DISABLED';
+
+/**
+ * GET /v1/business/delivery/connections, GET .../connections/{provider} —
+ * deliberately NEVER includes provisioning_token_encrypted or any credential
+ * (see routes_delivery.py's module docstring). `id` is null for a
+ * synthesised NOT_CONNECTED row (no DeliveryConnection exists yet for this
+ * provider/business).
+ */
+export interface DeliveryConnectionResponse {
+  id: string | null;
+  provider: DeliveryProvider;
+  provider_label: string;
+  status: DeliveryConnectionStatus;
+  environment: string;
+  external_store_id: string | null;
+  store_status: string | null;
+  last_status_synced_at: string | null;
+  activated_at: string | null;
+  disconnected_at: string | null;
+  error_reason: string | null;
+  needs_attention: boolean;
+  last_webhook_at: string | null;
+  last_order_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export type DeliveryOrderStatus =
+  | 'RECEIVED' | 'FETCHING' | 'NEEDS_MAPPING' | 'READY_TO_ACCEPT'
+  | 'ACCEPTED' | 'DENIED' | 'FULFILLED' | 'CANCELLED' | 'FAILED';
+
+/** Item/modifier text that failed to resolve against a saved mapping (unresolved_items_json). */
+export interface DeliveryUnresolvedItem {
+  external_id?: string | null;
+  external_text?: string;
+  [key: string]: unknown;
+}
+
+export interface DeliveryOrderResponse {
+  id: string;
+  provider: DeliveryProvider;
+  provider_label: string;
+  external_order_id: string;
+  status: DeliveryOrderStatus;
+  order_id: string | null;
+  gross_cents: number | null;
+  fee_cents: number | null;
+  currency: string;
+  placed_at: string | null;
+  // received_at + 600s (deliberately under Uber's real 690s/11.5min deadline)
+  // — the point past which the accept-deadline watchdog auto-denies an
+  // still-open order. See UBER_EATS_INTEGRATION_2026-10.md §1.
+  accept_deadline_at: string | null;
+  accepted_at: string | null;
+  denied_at: string | null;
+  cancelled_at: string | null;
+  deny_reason_code: string | null;
+  deny_reason_text: string | null;
+  unresolved_items: DeliveryUnresolvedItem[] | null;
+  failure_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeliveryOrderListResponse {
+  orders: DeliveryOrderResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+// Uber's real accepted reason-code enum (routes_delivery.py::_DENY_REASON_CODES)
+// — deny_order 422s on anything else.
+export const DELIVERY_DENY_REASON_CODES = [
+  'STORE_CLOSED', 'POS_NOT_READY', 'POS_OFFLINE', 'ITEM_AVAILABILITY',
+  'MISSING_ITEM', 'MISSING_INFO', 'PRICING', 'CAPACITY', 'ADDRESS',
+  'SPECIAL_INSTRUCTIONS', 'OTHER',
+] as const;
+export type DeliveryDenyReasonCode = typeof DELIVERY_DENY_REASON_CODES[number];
+
+export interface DeliveryDenyOrderRequest {
+  reason_code: DeliveryDenyReasonCode;
+  notes?: string | null;
+}
+
+export type DeliveryMappingKind = 'ITEM' | 'MODIFIER' | 'MODIFIER_GROUP' | 'CATEGORY';
+export type DeliveryMappingStatus = 'MAPPED' | 'UNMAPPED' | 'CHANGED' | 'INVALID' | 'IGNORED';
+
+export interface DeliveryMappingResponse {
+  id: string;
+  platform: DeliveryProvider;
+  kind: DeliveryMappingKind;
+  external_id: string | null;
+  external_text: string;
+  status: DeliveryMappingStatus;
+  status_reason: string | null;
+  menu_item_id: string | null;
+  menu_item_name: string | null;
+  option_id: string | null;
+  menu_add_on_id: string | null;
+  menu_add_on_name: string | null;
+  removable_ref_id: string | null;
+  is_ignored: boolean;
+  last_seen_at: string | null;
+  times_used: number;
+}
+
+export interface DeliveryMappingUpsertRequest {
+  platform: DeliveryProvider;
+  kind: DeliveryMappingKind;
+  external_id: string;
+  external_text: string;
+  menu_item_id?: string | null;
+  option_id?: string | null;
+  menu_add_on_id?: string | null;
+  removable_ref_id?: string | null;
+  is_ignored?: boolean;
 }
