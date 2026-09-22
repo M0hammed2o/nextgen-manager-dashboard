@@ -433,7 +433,17 @@ export interface WhatsAppConnection {
   whatsapp_paused: boolean;
 }
 
+/** POST /v1/business/whatsapp/connection/start — mints a single-use, ~10-minute anti-CSRF state token. */
+export interface WhatsAppConnectStartResponse {
+  state: string;
+  expires_in: number;
+}
+
 export interface WhatsAppExchangeRequest {
+  // Anti-CSRF/replay state minted by POST /connection/start — required as of
+  // tonight's backend hardening pass. A request without a valid, matching,
+  // unexpired state is rejected with 401 INVALID_OR_EXPIRED_STATE.
+  state: string;
   code: string;
   waba_id: string;
   phone_number_id: string;

@@ -76,6 +76,11 @@ describe('WhatsAppConnectPage', () => {
   afterEach(() => {
     vi.clearAllMocks();
     mockRole = 'OWNER';
+    // Clean up any Meta SDK globals/script tag a test may have set, so it
+    // never bleeds into the next test.
+    delete (window as unknown as { FB?: unknown }).FB;
+    delete (window as unknown as { fbAsyncInit?: unknown }).fbAsyncInit;
+    document.getElementById('facebook-jssdk')?.remove();
   });
 
   it('shows a graceful module-not-enabled state and never calls the connection endpoints when is_whatsapp_enabled is false', async () => {
@@ -110,6 +115,42 @@ describe('WhatsAppConnectPage', () => {
     renderWithClient(<WhatsAppConnectPage />);
 
     await waitFor(() => expect(screen.getByRole('button', { name: /connect whatsapp/i })).toBeInTheDocument());
+  });
+
+  it('clicking Connect WhatsApp mints a real anti-CSRF state via POST /connection/start and opens FB.login, showing a connecting state meanwhile', async () => {
+    mockGet({
+      '/v1/business/settings': ENABLED_SETTINGS,
+      '/v1/business/whatsapp/connection/config': AVAILABLE_CONFIG,
+      '/v1/business/whatsapp/connection': connection({ status: 'NOT_CONNECTED' }),
+    });
+    vi.mocked(apiClient.post).mockImplementation((path: string) => {
+      if (path === '/v1/business/whatsapp/connection/start') {
+        return Promise.resolve({ state: 'state-xyz', expires_in: 600 });
+      }
+      // FB.login below never calls back, so /connection/exchange must never
+      // be reached in this test.
+      return Promise.reject(new Error(`unexpected POST ${path}`));
+    });
+    const fbLogin = vi.fn(); // deliberately never invokes its callback
+    (window as unknown as { FB: { init: () => void; login: typeof fbLogin } }).FB = {
+      init: vi.fn(),
+      login: fbLogin,
+    };
+
+    renderWithClient(<WhatsAppConnectPage />);
+    const connectBtn = await screen.findByRole('button', { name: /connect whatsapp/i });
+    fireEvent.click(connectBtn);
+
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/v1/business/whatsapp/connection/start'));
+    await waitFor(() => expect(fbLogin).toHaveBeenCalledTimes(1));
+    // The config_id/response_type contract FB.login is called with.
+    expect(fbLogin.mock.calls[0][1]).toMatchObject({
+      config_id: 'cfg123',
+      response_type: 'code',
+      override_default_response_type: true,
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: /connecting/i })).toBeDisabled());
+    expect(apiClient.post).not.toHaveBeenCalledWith('/v1/business/whatsapp/connection/exchange', expect.anything());
   });
 
   it('hides the Connect button and shows an owner-only message for a MANAGER', async () => {

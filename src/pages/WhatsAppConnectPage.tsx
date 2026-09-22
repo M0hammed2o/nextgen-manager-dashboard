@@ -4,6 +4,7 @@ import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth';
 import { useBusinessSettings } from '@/hooks/use-business-settings';
 import { formatDateTime } from '@/lib/mappers';
+import { launchEmbeddedSignup } from '@/lib/whatsapp-embedded-signup';
 import type {
   WhatsAppConnectConfig, WhatsAppConnection,
   WhatsAppHealthCheckResponse, WhatsAppTestMessageResponse, WhatsAppStatus,
@@ -40,39 +41,6 @@ const STATUS_LABEL: Record<WhatsAppConnection['status'], string> = {
   NEEDS_ATTENTION: 'Needs attention',
   DISCONNECTED: 'Disconnected',
 };
-
-/**
- * Real Meta Embedded Signup handshake, per Meta's WhatsApp Embedded Signup
- * docs: FB.login() opens the popup; on success it returns an auth `code`,
- * and a separate `message` event (type "WA_EMBEDDED_SIGNUP") carries the
- * chosen waba_id/phone_number_id. Both are required by our backend's
- * POST /connection/exchange.
- *
- * TODO(wire-to-meta): this call site is intentionally NOT implemented here.
- * It needs:
- *   1. The Meta JS SDK script (https://connect.facebook.net/en_US/sdk.js)
- *      loaded once, initialised with `config.app_id` and `config.graph_version`.
- *   2. A `window.addEventListener('message', ...)` handler registered
- *      *before* calling FB.login to capture the WA_EMBEDDED_SIGNUP payload
- *      (waba_id / phone_number_id) — FB.login's own callback only returns
- *      the `code`.
- *   3. window.FB.login(callback, { config_id: config.config_id,
- *      response_type: 'code', override_default_response_type: true }).
- * None of that is safe to fake — a stubbed popup would look like a working
- * "Connect" button while silently doing nothing. Until META_APP_ID/
- * META_ES_CONFIG_ID are configured platform-wide (GET /config returns
- * available:false until then) there is nothing real to wire this to in this
- * environment, so it deliberately surfaces an honest message instead.
- */
-function launchEmbeddedSignup(
-  _config: WhatsAppConnectConfig,
-  onUnavailable: (message: string) => void,
-): void {
-  onUnavailable(
-    'The Meta WhatsApp Embedded Signup popup is not wired up in this environment yet. ' +
-    'This button will open Meta\'s real connect flow once the JS SDK integration ships.'
-  );
-}
 
 function TechnicalDetails({ details }: { details: Record<string, unknown> }) {
   const [open, setOpen] = useState(false);
@@ -199,6 +167,7 @@ export default function WhatsAppConnectPage() {
   const [testTo, setTestTo] = useState('');
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [lastHealthCheck, setLastHealthCheck] = useState<WhatsAppHealthCheckResponse | null>(null);
+  const [connecting, setConnecting] = useState(false);
 
   const healthCheckMutation = useMutation({
     mutationFn: () => apiClient.post<WhatsAppHealthCheckResponse>('/v1/business/whatsapp/connection/health-check'),
@@ -275,10 +244,29 @@ export default function WhatsAppConnectPage() {
     );
   }
 
-  const handleConnectClick = () => {
-    launchEmbeddedSignup(config, (message) => {
-      toast({ title: 'WhatsApp connect not available yet', description: message });
-    });
+  const handleConnectClick = async () => {
+    if (connecting) return; // guard against a double-click opening two popups
+    setConnecting(true);
+    try {
+      await launchEmbeddedSignup(config, {
+        onCancelled: () => {
+          // User closed the popup or hit Cancel — not an error, just reset.
+        },
+        onUnavailable: (message) => {
+          toast({ title: 'Could not connect WhatsApp', description: message, variant: 'destructive' });
+        },
+        onExchangeResult: (result) => {
+          queryClient.setQueryData(['whatsapp-connection'], result.connection);
+          toast({
+            title: result.success ? 'WhatsApp connected' : 'Connection not completed',
+            description: result.message,
+            variant: result.success ? undefined : 'destructive',
+          });
+        },
+      });
+    } finally {
+      setConnecting(false);
+    }
   };
 
   return (
@@ -325,8 +313,9 @@ export default function WhatsAppConnectPage() {
           </CardHeader>
           <CardContent>
             {isOwner ? (
-              <Button onClick={handleConnectClick} className="gap-1.5">
-                <MessageCircle className="w-4 h-4" /> Connect WhatsApp
+              <Button onClick={handleConnectClick} disabled={connecting} className="gap-1.5">
+                {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageCircle className="w-4 h-4" />}
+                {connecting ? 'Connecting…' : 'Connect WhatsApp'}
               </Button>
             ) : (
               <p className="text-sm text-muted-foreground">Only the account owner can connect WhatsApp.</p>
