@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PageSkeleton, EmptyState, ErrorState, InlineErrorBanner } from '@/components/shared/PageComponents';
+import { StatusBadge } from '@/components/shared/StatusBadge';
 import OrderReversalPanel from '@/components/orders/OrderReversalPanel';
 import ResendReceiptButton from '@/components/orders/ResendReceiptButton';
 import {
@@ -54,6 +55,44 @@ const paymentLabels: Record<PaymentStatus, string> = {
   CASH_ON_COLLECTION: 'Cash',
 };
 
+// ── Order source (POS / WhatsApp / delivery marketplace) ────────────────────
+// Values match the backend's `OrderSource` enum (shared/enums.py) exactly —
+// POS/WHATSAPP/MANUAL/ADMIN are in-store channels, UBER_EATS/MR_D/
+// OTHER_EXTERNAL are marketplace channels imported via the existing CSV
+// reconciliation flow (see ExternalOrdersPage.tsx, which this page does not
+// duplicate or replace).
+const SOURCE_VALUES = ['POS', 'WHATSAPP', 'UBER_EATS', 'MR_D', 'MANUAL', 'ADMIN', 'OTHER_EXTERNAL'] as const;
+
+const sourceLabels: Record<string, string> = {
+  POS: 'POS',
+  WHATSAPP: 'WhatsApp',
+  MANUAL: 'Manual',
+  ADMIN: 'Admin',
+  UBER_EATS: 'Uber Eats',
+  MR_D: 'Mr D',
+  OTHER_EXTERNAL: 'Other External',
+};
+
+const sourceBadgeClassName: Record<string, string> = {
+  POS: 'bg-muted text-muted-foreground border-border',
+  WHATSAPP: 'bg-success/10 text-[hsl(var(--success))] border-success/30',
+  MANUAL: 'bg-muted text-muted-foreground border-border',
+  ADMIN: 'bg-muted text-muted-foreground border-border',
+  UBER_EATS: 'bg-primary/10 text-primary border-primary/30',
+  MR_D: 'bg-warning/10 text-warning border-warning/30',
+  OTHER_EXTERNAL: 'bg-muted text-muted-foreground border-border',
+};
+
+function OrderSourceBadge({ source }: { source: string }) {
+  return (
+    <StatusBadge
+      variant="outline"
+      label={sourceLabels[source] ?? source}
+      className={sourceBadgeClassName[source] ?? 'bg-muted text-muted-foreground border-border'}
+    />
+  );
+}
+
 // ── Audio alert (plays a short beep for new orders) ──────────────────────────
 
 function playNewOrderSound() {
@@ -81,6 +120,7 @@ export default function OrdersPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<string>('live');
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newOrderCount, setNewOrderCount] = useState(0);
@@ -98,7 +138,13 @@ export default function OrdersPage() {
     refetchInterval: 5000,
   });
 
-  const orders = ordersRes?.data ?? [];
+  const allOrders = ordersRes?.data ?? [];
+  // Source filtering is client-side over the currently loaded page: the
+  // business-plane GET /v1/business/orders endpoint (backend/app/api/v1/
+  // routes_orders.py::list_orders) supports `status`/`live`/`cursor` query
+  // params but no `source` param, so there is no server-side filter to call.
+  // This still correctly badges/filters every order actually on screen.
+  const orders = sourceFilter === 'all' ? allOrders : allOrders.filter(o => o.source === sourceFilter);
 
   // ── SSE subscription for real-time push (falls back to the 5 s poll above
   // if the stream can't connect — see src/lib/sse.ts and KNOWN_BUGS.md
@@ -197,6 +243,17 @@ export default function OrdersPage() {
               <SelectItem value="CANCELLED">Cancelled</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={sourceFilter} onValueChange={setSourceFilter}>
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Filter source" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Sources</SelectItem>
+              {SOURCE_VALUES.map(s => (
+                <SelectItem key={s} value={s}>{sourceLabels[s]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Dialog open={showCreate} onOpenChange={setShowCreate}>
             <DialogTrigger asChild>
               <Button className="gap-1.5"><Plus className="w-4 h-4" /> New Order</Button>
@@ -210,11 +267,20 @@ export default function OrdersPage() {
       </div>
 
       {orders.length === 0 ? (
-        <EmptyState
-          icon={<ShoppingCart className="w-12 h-12" />}
-          title="No orders found"
-          description="Orders will appear here when customers place them"
-        />
+        allOrders.length > 0 ? (
+          <EmptyState
+            icon={<ShoppingCart className="w-12 h-12" />}
+            title="No orders match this source"
+            description={`No ${sourceLabels[sourceFilter] ?? sourceFilter} orders in the current view. Try a different source or clear the filter.`}
+            action={<Button variant="outline" size="sm" onClick={() => setSourceFilter('all')}>Clear source filter</Button>}
+          />
+        ) : (
+          <EmptyState
+            icon={<ShoppingCart className="w-12 h-12" />}
+            title="No orders found"
+            description="Orders will appear here when customers place them"
+          />
+        )
       ) : (
         <div className="bg-card border border-border rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
@@ -222,6 +288,7 @@ export default function OrdersPage() {
               <thead>
                 <tr className="border-b border-border bg-muted/30">
                   <th className="text-left p-4 font-medium text-muted-foreground">Order</th>
+                  <th className="text-left p-4 font-medium text-muted-foreground">Source</th>
                   <th className="text-left p-4 font-medium text-muted-foreground">Customer</th>
                   <th className="text-left p-4 font-medium text-muted-foreground">Status</th>
                   <th className="text-left p-4 font-medium text-muted-foreground">Payment</th>
@@ -237,6 +304,7 @@ export default function OrdersPage() {
                     className={`border-b border-border/50 hover:bg-muted/20 transition-colors ${order.status === 'NEW' ? 'bg-warning/5' : ''}`}
                   >
                     <td className="p-4 font-medium text-foreground">#{order.order_number}</td>
+                    <td className="p-4"><OrderSourceBadge source={order.source} /></td>
                     <td className="p-4 text-foreground">{order.customer_name ?? 'Walk-in'}</td>
                     <td className="p-4">
                       <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusColors[order.status] ?? 'bg-muted text-muted-foreground'}`}>
@@ -316,7 +384,7 @@ export default function OrdersPage() {
                 <div><span className="text-muted-foreground">Customer:</span> <span className="text-foreground font-medium">{selectedOrder.customer_name ?? 'Walk-in'}</span></div>
                 <div><span className="text-muted-foreground">Phone:</span> <span className="text-foreground">{selectedOrder.phone_number ?? '—'}</span></div>
                 <div><span className="text-muted-foreground">Mode:</span> <span className="text-foreground">{selectedOrder.order_mode}</span></div>
-                <div><span className="text-muted-foreground">Source:</span> <span className="text-foreground">{selectedOrder.source}</span></div>
+                <div><span className="text-muted-foreground">Source:</span> <OrderSourceBadge source={selectedOrder.source} /></div>
                 <div>
                   <span className="text-muted-foreground">Status:</span>{' '}
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColors[selectedOrder.status] ?? ''}`}>{selectedOrder.status}</span>
