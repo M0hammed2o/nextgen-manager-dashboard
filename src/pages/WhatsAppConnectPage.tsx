@@ -10,7 +10,7 @@ import type {
 } from '@/types/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -288,7 +288,7 @@ export default function WhatsAppConnectPage() {
           <h1 className="text-2xl font-bold text-foreground">WhatsApp Connect</h1>
           <p className="text-sm text-muted-foreground">Connect your own WhatsApp Business number for ordering</p>
         </div>
-        <Badge variant={STATUS_BADGE_VARIANT[connection.status]}>{STATUS_LABEL[connection.status]}</Badge>
+        <StatusBadge variant={STATUS_BADGE_VARIANT[connection.status]} label={STATUS_LABEL[connection.status]} />
       </div>
 
       {connection.on_legacy_platform_path && connection.status !== 'CONNECTED' && (

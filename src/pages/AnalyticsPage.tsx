@@ -2,8 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { mapAnalyticsSummary, formatCurrency, formatCents } from '@/lib/mappers';
 import type { AnalyticsSummaryRaw, TopItem, DailyAnalytics } from '@/types/api';
-import { StatCard, PageSkeleton } from '@/components/shared/PageComponents';
-import { ShoppingCart, DollarSign, Users, Cpu } from 'lucide-react';
+import { StatCard, PageSkeleton, EmptyState } from '@/components/shared/PageComponents';
+import { ShoppingCart, DollarSign, Users, Cpu, BarChart3, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
@@ -89,7 +89,10 @@ export default function AnalyticsPage() {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <p className="text-muted-foreground text-sm text-center py-16">No data available</p>
+            <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
+              <BarChart3 className="w-8 h-8" />
+              <p className="text-sm">No orders in this period yet</p>
+            </div>
           )}
         </div>
 
@@ -106,7 +109,10 @@ export default function AnalyticsPage() {
               </LineChart>
             </ResponsiveContainer>
           ) : (
-            <p className="text-muted-foreground text-sm text-center py-16">No data available</p>
+            <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
+              <TrendingUp className="w-8 h-8" />
+              <p className="text-sm">No revenue in this period yet</p>
+            </div>
           )}
         </div>
       </div>
@@ -115,7 +121,11 @@ export default function AnalyticsPage() {
       <div className="bg-card border border-border rounded-xl p-6">
         <h3 className="font-semibold text-foreground mb-4">Top Selling Items</h3>
         {topItems.length === 0 ? (
-          <p className="text-muted-foreground text-sm text-center py-8">No data available</p>
+          <EmptyState
+            icon={<ShoppingCart className="w-10 h-10" />}
+            title="No items sold yet"
+            description="Once orders come in for this period, your best-selling items will show up here."
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

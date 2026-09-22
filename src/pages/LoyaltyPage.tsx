@@ -6,7 +6,7 @@ import type {
 } from '@/types/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -395,7 +395,7 @@ function CustomerLookupCard() {
                 <p className="font-medium text-foreground">{customer.display_name || customer.phone_number}</p>
                 <p className="text-xs text-muted-foreground">{customer.phone_number}</p>
               </div>
-              <Badge variant={TIER_VARIANT[customer.loyalty_tier] ?? 'outline'}>{customer.loyalty_tier}</Badge>
+              <StatusBadge variant={TIER_VARIANT[customer.loyalty_tier] ?? 'outline'} label={customer.loyalty_tier} />
             </div>
             <p className="text-2xl font-bold text-foreground">{customer.loyalty_points_balance} pts</p>
 
