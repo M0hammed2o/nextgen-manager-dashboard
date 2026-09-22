@@ -394,6 +394,70 @@ export interface WhatsAppStatus {
   busy_text: string | null;
 }
 
+// ── WhatsApp Connect (customer-owned WhatsApp via Meta Embedded Signup) —
+//    matches backend/app/api/v1/routes_whatsapp_connect.py exactly ──
+export type WhatsAppConnectionStatusValue =
+  | 'NOT_CONNECTED' | 'PENDING' | 'CONNECTED' | 'NEEDS_ATTENTION' | 'DISCONNECTED';
+
+/** GET /v1/business/whatsapp/connection/config — public identifiers only, never a secret. */
+export interface WhatsAppConnectConfig {
+  available: boolean;
+  reason: string | null;
+  app_id: string | null;
+  config_id: string | null;
+  graph_version: string | null;
+}
+
+/**
+ * GET /v1/business/whatsapp/connection — deliberately never includes a
+ * token/secret (see routes_whatsapp_connect.py's WhatsAppConnectionStatus
+ * docstring). Safe to hold in component state / TanStack Query cache.
+ */
+export interface WhatsAppConnection {
+  connected: boolean;
+  status: WhatsAppConnectionStatusValue;
+  status_reason: string | null;
+  waba_id: string | null;
+  display_phone_number: string | null;
+  verified_name: string | null;
+  webhook_subscribed: boolean;
+  phone_registered: boolean;
+  quality_rating: string | null;
+  messaging_limit_tier: string | null;
+  connected_at: string | null;
+  disconnected_at: string | null;
+  last_health_check_at: string | null;
+  last_webhook_at: string | null;
+  on_legacy_platform_path: boolean;
+  whatsapp_module_enabled: boolean;
+  whatsapp_paused: boolean;
+}
+
+export interface WhatsAppExchangeRequest {
+  code: string;
+  waba_id: string;
+  phone_number_id: string;
+}
+
+export interface WhatsAppExchangeResponse {
+  success: boolean;
+  failed_step: string | null;
+  message: string;
+  connection: WhatsAppConnection;
+}
+
+export interface WhatsAppHealthCheckResponse {
+  ok: boolean;
+  detail: string;
+  technical_details: Record<string, unknown>;
+  connection: WhatsAppConnection;
+}
+
+export interface WhatsAppTestMessageResponse {
+  success: boolean;
+  detail: string;
+}
+
 // Assets
 export interface UploadUrlResponse {
   upload_url: string;

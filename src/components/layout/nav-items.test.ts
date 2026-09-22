@@ -38,7 +38,13 @@ describe('isNavItemVisible — WhatsApp/inventory nav gating predicate', () => {
     expect(isNavItemVisible(bothItem, { inventory_enabled: true, is_whatsapp_enabled: true })).toBe(true);
   });
 
-  it('no current nav item actually requires WhatsApp today (documents current state, not a design constraint)', () => {
-    expect(navItems.some((item) => item.requiresWhatsapp)).toBe(false);
+  it('the WhatsApp Connect nav item is gated on requiresWhatsapp (added for the Embedded Signup UI)', () => {
+    const whatsappConnect = navItems.find((item) => item.to === '/settings/whatsapp');
+    expect(whatsappConnect?.requiresWhatsapp).toBe(true);
+  });
+
+  it('no nav item other than WhatsApp Connect requires WhatsApp today (documents current state, not a design constraint)', () => {
+    const gated = navItems.filter((item) => item.requiresWhatsapp);
+    expect(gated.map((item) => item.to)).toEqual(['/settings/whatsapp']);
   });
 });
