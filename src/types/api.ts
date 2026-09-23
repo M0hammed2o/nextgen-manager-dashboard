@@ -462,6 +462,15 @@ export interface BusinessSettings {
   // Core Analytics (/summary, /top-items, /daily), which stays available
   // on every plan.
   advanced_analytics_enabled: boolean;
+  // Loyalty entitlement (migration 0051, KNOWN_BUGS.md BUG-0107) —
+  // platform-admin-set, business-plane READ-ONLY, same pattern as
+  // advanced_analytics_enabled/delivery_platforms_enabled above. Gates every
+  // route in routes_loyalty.py plus POS checkout's loyalty_reward_id
+  // redemption (409 LOYALTY_NOT_ENABLED). Closes the gap where a POS-only
+  // (R899) tenant could previously self-enable the Loyalty module via
+  // LoyaltyProgram.is_enabled alone — Loyalty is sold in NextGen Complete
+  // (from R2,499) and above.
+  loyalty_enabled: boolean;
 }
 
 // WhatsApp pause/busy toggle

@@ -61,4 +61,21 @@ describe('isNavItemVisible — WhatsApp/inventory nav gating predicate', () => {
     const deliveryPlatforms = navItems.find((item) => item.to === '/settings/delivery');
     expect(deliveryPlatforms?.requiresDeliveryPlatforms).toBe(true);
   });
+
+  // Loyalty entitlement (migration 0051, Business.loyalty_enabled,
+  // KNOWN_BUGS.md BUG-0107) — closes the gap where a POS-only plan could
+  // previously self-enable Loyalty via LoyaltyProgram.is_enabled alone.
+  it('a requiresLoyalty item is hidden until loyalty_enabled is true', () => {
+    const loyaltyItem: NavItem = {
+      to: '/loyalty', icon: navItems[0].icon, label: 'Loyalty', requiresLoyalty: true,
+    };
+    expect(isNavItemVisible(loyaltyItem, undefined)).toBe(false);
+    expect(isNavItemVisible(loyaltyItem, { loyalty_enabled: false })).toBe(false);
+    expect(isNavItemVisible(loyaltyItem, { loyalty_enabled: true })).toBe(true);
+  });
+
+  it('the Loyalty nav item is gated on requiresLoyalty', () => {
+    const loyalty = navItems.find((item) => item.to === '/loyalty');
+    expect(loyalty?.requiresLoyalty).toBe(true);
+  });
 });

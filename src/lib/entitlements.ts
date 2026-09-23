@@ -63,3 +63,32 @@ export function shouldShowAdvancedAnalyticsUpgradePrompt(
   }
   return true;
 }
+
+/**
+ * Detects the backend's 409 LOYALTY_NOT_ENABLED response (migration 0051,
+ * `Business.loyalty_enabled`, KNOWN_BUGS.md BUG-0107) — gates every route in
+ * routes_loyalty.py (`_require_loyalty_enabled`) plus POS checkout's
+ * `loyalty_reward_id` redemption. Matches the existing INVENTORY_NOT_ENABLED
+ * / ADVANCED_ANALYTICS_NOT_ENABLED detection pattern used elsewhere in this
+ * app.
+ *
+ * Unlike Advanced Analytics (a section *within* the always-visible Analytics
+ * page, so it needs its own proactive `isEntitled` + `useBusinessSettings`
+ * check to decide what to render), Loyalty is its own dedicated route whose
+ * visibility is already proactively gated at the nav level (see
+ * nav-items.ts's `requiresLoyalty`). This detector exists purely for the
+ * fallback case nav-hiding doesn't cover — hidden navigation is a
+ * convenience only, not the enforcement, so a user can still land on
+ * LoyaltyPage (deep link, stale tab, or a race right after an admin flips
+ * the flag off) and get a real 409 from the backend, same as
+ * IngredientsPage.tsx's `INVENTORY_NOT_ENABLED` handling. LoyaltyPage.tsx
+ * uses this to show the same friendly "not enabled" empty state instead of
+ * a raw error.
+ */
+export function isLoyaltyNotEnabledError(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null | undefined)?.code;
+  if (typeof code === 'string' && code === 'LOYALTY_NOT_ENABLED') return true;
+
+  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  return message.includes('LOYALTY_NOT_ENABLED') || message.toLowerCase().includes('not enabled');
+}

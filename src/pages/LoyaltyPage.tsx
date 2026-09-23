@@ -6,6 +6,7 @@ import type {
   LoyaltyRedeemResponse, LoyaltyAdjustmentRequest, LoyaltyAdjustmentResponse,
 } from '@/types/api';
 import { useAuth } from '@/lib/auth';
+import { isLoyaltyNotEnabledError } from '@/lib/entitlements';
 import { formatCents, parseRandsToCents, centsToRandsInput } from '@/lib/mappers';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -21,7 +22,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
-import { Gift, Plus, Edit, Trash2, Loader2, Search, Award, Info, PlusCircle, MinusCircle } from 'lucide-react';
+import { Gift, Plus, Edit, Trash2, Loader2, Search, Award, Info, PlusCircle, MinusCircle, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 /** Matches routes_loyalty.py's redeemable rule exactly: a reward is
@@ -748,12 +749,42 @@ function CustomerLookupCard({ role }: { role: string }) {
 
 export default function LoyaltyPage() {
   const { user } = useAuth();
-  const { data: program, isLoading, isError, refetch, isFetching } = useQuery({
+  const { data: program, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['loyalty-program'],
     queryFn: () => apiClient.get<LoyaltyProgram>('/v1/business/loyalty/program'),
   });
 
   if (isLoading) return <PageSkeleton />;
+
+  // Loyalty is a Commercial V1 tier-gate entitlement (Business.loyalty_enabled,
+  // migration 0051, KNOWN_BUGS.md BUG-0107) — the nav item that links here is
+  // already hidden for a non-entitled tenant (see nav-items.ts's
+  // requiresLoyalty), but that's a convenience only, not the enforcement.
+  // The backend (_require_loyalty_enabled) is the real gate, so this page
+  // still handles a 409 LOYALTY_NOT_ENABLED gracefully — e.g. a deep link, a
+  // stale tab, or a race right after an admin flips the flag off — with the
+  // same friendly "not enabled" empty state IngredientsPage.tsx shows for
+  // INVENTORY_NOT_ENABLED, instead of a raw error/retry state.
+  if (isError && isLoyaltyNotEnabledError(error)) {
+    return (
+      <div className="space-y-6 max-w-3xl">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Loyalty</h1>
+          <p className="text-sm text-muted-foreground">Reward repeat customers with points on every order</p>
+        </div>
+        <Card>
+          <CardContent className="pt-6">
+            <EmptyState
+              icon={<Lock className="w-10 h-10" />}
+              title="Loyalty isn't enabled for your account"
+              description="The Loyalty module is part of the NextGen Complete plan (from R2,499) and above. Contact NextGen to add this module."
+            />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (isError || !program) {
     return <ErrorState message="Couldn't load your loyalty program." onRetry={() => refetch()} isRetrying={isFetching} />;
   }

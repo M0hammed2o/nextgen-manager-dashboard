@@ -15,6 +15,15 @@ export interface NavItem {
   requiresWhatsapp?: boolean;
   /** Hidden unless the business's delivery marketplace module (Uber Eats/Mr D API) is enabled. */
   requiresDeliveryPlatforms?: boolean;
+  /**
+   * Hidden unless the business's Loyalty entitlement (migration 0051,
+   * `Business.loyalty_enabled`, KNOWN_BUGS.md BUG-0107) is on. Unlike
+   * Advanced Analytics (a section within the Analytics page, gated inline —
+   * see AnalyticsPage.tsx), Loyalty is its own dedicated route with nothing
+   * else on it, so nav-level gating (same as requiresInventory) is correct
+   * here.
+   */
+  requiresLoyalty?: boolean;
 }
 
 /**
@@ -61,7 +70,7 @@ export const navItems: NavItem[] = [
   // hiding this whole nav item would also hide Core Analytics for a
   // non-entitled tenant, which is wrong.
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
-  { to: '/loyalty', icon: Gift, label: 'Loyalty' },
+  { to: '/loyalty', icon: Gift, label: 'Loyalty', requiresLoyalty: true },
   { to: '/settings', icon: Settings, label: 'Settings' },
   { to: '/settings/receipts', icon: Receipt, label: 'Receipts' },
   { to: '/settings/billing', icon: CreditCard, label: 'Billing' },
@@ -76,13 +85,24 @@ export const navItems: NavItem[] = [
  * Hidden (not merely disabled) while `settings` hasn't loaded yet, same as
  * the pre-existing `requiresInventory` gate, rather than flashing a
  * module-gated item on then off.
+ *
+ * This is a convenience/UX gate only — it hides the entry point so a
+ * non-entitled tenant doesn't stumble into a page that will just 409. The
+ * backend (`_require_loyalty_enabled` etc.) is the real enforcement and is
+ * unaffected by anything here.
  */
 export function isNavItemVisible(
   item: NavItem,
-  settings: { inventory_enabled?: boolean; is_whatsapp_enabled?: boolean; delivery_platforms_enabled?: boolean } | undefined
+  settings: {
+    inventory_enabled?: boolean;
+    is_whatsapp_enabled?: boolean;
+    delivery_platforms_enabled?: boolean;
+    loyalty_enabled?: boolean;
+  } | undefined
 ): boolean {
   if (item.requiresInventory && !settings?.inventory_enabled) return false;
   if (item.requiresWhatsapp && !settings?.is_whatsapp_enabled) return false;
   if (item.requiresDeliveryPlatforms && !settings?.delivery_platforms_enabled) return false;
+  if (item.requiresLoyalty && !settings?.loyalty_enabled) return false;
   return true;
 }

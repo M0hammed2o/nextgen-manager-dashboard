@@ -165,6 +165,28 @@ describe('LoyaltyPage', () => {
     await waitFor(() => expect(screen.getByText('150 pts')).toBeInTheDocument());
   });
 
+  // Loyalty entitlement (migration 0051, Business.loyalty_enabled,
+  // KNOWN_BUGS.md BUG-0107) — the nav item is already hidden for a
+  // non-entitled tenant (see nav-items.test.ts), but hidden navigation is a
+  // convenience only. This is the "still handles the 409 gracefully" safety
+  // net for a deep link / stale tab / race, mirroring AnalyticsPage's
+  // ADVANCED_ANALYTICS_NOT_ENABLED handling.
+  it('shows a friendly upgrade prompt, not a raw error, when the backend 409s LOYALTY_NOT_ENABLED', async () => {
+    vi.mocked(apiClient.get).mockImplementation((path: string) => {
+      if (path === '/v1/business/loyalty/program') {
+        return Promise.reject(new ApiError('Loyalty is not enabled for this business', 409, 'LOYALTY_NOT_ENABLED'));
+      }
+      return Promise.reject(new Error(`unexpected GET ${path}`));
+    });
+
+    renderWithClient(<LoyaltyPage />);
+
+    await waitFor(() => expect(screen.getByText(/loyalty isn't enabled for your account/i)).toBeInTheDocument());
+    expect(screen.getByText(/nextgen complete plan/i)).toBeInTheDocument();
+    // Not the generic retryable ErrorState — no "Retry" control for this case.
+    expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument();
+  });
+
   it('shows a retryable error state (not a silent blank result) when the phone lookup fails', async () => {
     mockGet({
       '/v1/business/loyalty/program': ENABLED_PROGRAM,
