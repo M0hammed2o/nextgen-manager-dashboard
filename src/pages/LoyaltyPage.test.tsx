@@ -282,6 +282,66 @@ describe('LoyaltyPage — redeemable-at-POS vs manual-handover reward distinctio
   });
 });
 
+describe('LoyaltyPage — reward catalogue mutation controls: role gating', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    authState.role = 'OWNER';
+  });
+
+  it('STAFF sees the reward list but no Add/Edit/Delete controls', async () => {
+    authState.role = 'STAFF';
+    mockGet({
+      '/v1/business/loyalty/program': ENABLED_PROGRAM,
+      '/v1/business/loyalty/rewards': REWARDS,
+    });
+    renderWithClient(<LoyaltyPage />);
+
+    // The list itself — useful read-only information — is still visible.
+    expect(await screen.findByText('Free coffee')).toBeInTheDocument();
+    expect(screen.getByText(/100 pts/i)).toBeInTheDocument();
+
+    // But no control that would 403 against require_owner_or_manager — the
+    // whole Actions column (header + per-row Edit/Delete icon buttons) is
+    // absent, not just disabled.
+    expect(screen.queryByRole('button', { name: /add reward/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/^actions$/i)).not.toBeInTheDocument();
+  });
+
+  it('STAFF sees no "Add reward" action in the empty state either', async () => {
+    authState.role = 'STAFF';
+    mockGet({ '/v1/business/loyalty/program': ENABLED_PROGRAM, '/v1/business/loyalty/rewards': [] });
+    renderWithClient(<LoyaltyPage />);
+
+    expect(await screen.findByText(/no rewards yet/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /add reward/i })).not.toBeInTheDocument();
+  });
+
+  it('OWNER sees the Add reward control and per-row Edit/Delete controls', async () => {
+    authState.role = 'OWNER';
+    mockGet({
+      '/v1/business/loyalty/program': ENABLED_PROGRAM,
+      '/v1/business/loyalty/rewards': REWARDS,
+    });
+    renderWithClient(<LoyaltyPage />);
+
+    expect(await screen.findByText('Free coffee')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /add reward/i })).toBeInTheDocument();
+    expect(screen.getByText(/^actions$/i)).toBeInTheDocument();
+  });
+
+  it('MANAGER sees the Add reward control too', async () => {
+    authState.role = 'MANAGER';
+    mockGet({
+      '/v1/business/loyalty/program': ENABLED_PROGRAM,
+      '/v1/business/loyalty/rewards': REWARDS,
+    });
+    renderWithClient(<LoyaltyPage />);
+
+    expect(await screen.findByText('Free coffee')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /add reward/i })).toBeInTheDocument();
+  });
+});
+
 describe('LoyaltyPage — manual points adjustment: role gating', () => {
   afterEach(() => {
     vi.clearAllMocks();

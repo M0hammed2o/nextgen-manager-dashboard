@@ -298,12 +298,23 @@ function RewardForm({ reward, onClose }: { reward: LoyaltyReward | null; onClose
   );
 }
 
-function RewardsCatalogueCard() {
+/**
+ * Add/Edit/Delete are OWNER/MANAGER-only on the backend
+ * (`require_owner_or_manager` on POST/PUT/DELETE /v1/business/loyalty/rewards
+ * in routes_loyalty.py) — `role` here only controls whether the controls are
+ * shown at all, mirroring PointsAdjustmentPanel's and OrderReversalPanel's
+ * gating pattern, so a STAFF user never sees a button that would 403. The
+ * catalogue itself stays visible to everyone — it's useful read-only
+ * information regardless of role.
+ */
+function RewardsCatalogueCard({ role }: { role: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<LoyaltyReward | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<LoyaltyReward | null>(null);
+
+  const isManager = role === 'OWNER' || role === 'MANAGER';
 
   const { data: rewards, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['loyalty-rewards'],
@@ -330,9 +341,11 @@ function RewardsCatalogueCard() {
           <CardTitle className="text-base flex items-center gap-2"><Award className="w-4 h-4" /> Reward catalogue</CardTitle>
           <CardDescription>Rewards customers can redeem their points for.</CardDescription>
         </div>
-        <Button size="sm" className="gap-1.5" onClick={() => { setEditing(null); setShowModal(true); }}>
-          <Plus className="w-4 h-4" /> Add reward
-        </Button>
+        {isManager && (
+          <Button size="sm" className="gap-1.5" onClick={() => { setEditing(null); setShowModal(true); }}>
+            <Plus className="w-4 h-4" /> Add reward
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -344,7 +357,9 @@ function RewardsCatalogueCard() {
             icon={<Award className="w-10 h-10" />}
             title="No rewards yet"
             description="Add a reward customers can redeem their points for, like a free item or a discount voucher."
-            action={<Button onClick={() => { setEditing(null); setShowModal(true); }} className="gap-1.5"><Plus className="w-4 h-4" /> Add reward</Button>}
+            action={isManager ? (
+              <Button onClick={() => { setEditing(null); setShowModal(true); }} className="gap-1.5"><Plus className="w-4 h-4" /> Add reward</Button>
+            ) : undefined}
           />
         ) : (
           <Table>
@@ -354,7 +369,7 @@ function RewardsCatalogueCard() {
                 <TableHead>Description</TableHead>
                 <TableHead>Points cost</TableHead>
                 <TableHead>Value</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                {isManager && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -373,14 +388,16 @@ function RewardsCatalogueCard() {
                       <StatusBadge variant="outline" label="Manual handover only" />
                     )}
                   </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditing(reward); setShowModal(true); }}>
-                      <Edit className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteTarget(reward)}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </TableCell>
+                  {isManager && (
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditing(reward); setShowModal(true); }}>
+                        <Edit className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteTarget(reward)}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -388,29 +405,33 @@ function RewardsCatalogueCard() {
         )}
       </CardContent>
 
-      <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{editing ? 'Edit reward' : 'Add reward'}</DialogTitle></DialogHeader>
-          <RewardForm reward={editing} onClose={() => setShowModal(false)} />
-        </DialogContent>
-      </Dialog>
+      {isManager && (
+        <>
+          <Dialog open={showModal} onOpenChange={setShowModal}>
+            <DialogContent className="max-w-md">
+              <DialogHeader><DialogTitle>{editing ? 'Edit reward' : 'Add reward'}</DialogTitle></DialogHeader>
+              <RewardForm reward={editing} onClose={() => setShowModal(false)} />
+            </DialogContent>
+          </Dialog>
 
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove {deleteTarget?.name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Customers will no longer be able to redeem this reward. Past redemptions are unaffected.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)} disabled={deleteMutation.isPending}>
-              {deleteMutation.isPending ? 'Removing…' : 'Remove'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+          <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Remove {deleteTarget?.name}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Customers will no longer be able to redeem this reward. Past redemptions are unaffected.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)} disabled={deleteMutation.isPending}>
+                  {deleteMutation.isPending ? 'Removing…' : 'Remove'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      )}
     </Card>
   );
 }
@@ -748,7 +769,7 @@ export default function LoyaltyPage() {
 
       {program.is_enabled ? (
         <>
-          <RewardsCatalogueCard />
+          <RewardsCatalogueCard role={user?.role ?? ''} />
           <CustomerLookupCard role={user?.role ?? ''} />
         </>
       ) : (
