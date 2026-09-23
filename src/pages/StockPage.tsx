@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { formatCurrency } from '@/lib/mappers';
-import type { Ingredient, StockMovement } from '@/types/inventory';
+import type { Ingredient, StockMovement, Supplier } from '@/types/inventory';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -66,6 +66,7 @@ export default function StockPage() {
   const { toast } = useToast();
   const [lines, setLines] = useState<ReceiptLine[]>([]);
   const [reference, setReference] = useState('');
+  const [supplierId, setSupplierId] = useState('');
   const [showReceiving, setShowReceiving] = useState(false);
   const [drillDown, setDrillDown] = useState<LiveStockRow | null>(null);
   const [attentionOnly, setAttentionOnly] = useState(false);
@@ -105,6 +106,15 @@ export default function StockPage() {
     queryFn: () => apiClient.get<Ingredient[]>('/v1/business/inventory/ingredients'),
   });
 
+  // Active suppliers only — attributing a delivery to a deactivated supplier
+  // would be a strange thing to offer, and the backend's own delete-safety
+  // rule (see SuppliersPage.tsx) depends on this count actually accumulating
+  // when a supplier IS chosen here.
+  const { data: suppliers } = useQuery({
+    queryKey: ['suppliers', false],
+    queryFn: () => apiClient.get<Supplier[]>('/v1/business/inventory/suppliers?include_inactive=false'),
+  });
+
   // Cheap reuse of the same coverage check RecipesPage.tsx already shows in
   // full (item-by-item, with names) — this is deliberately just the count,
   // as a heads-up that expected stock here may be overstated for reasons
@@ -127,6 +137,7 @@ export default function StockPage() {
     mutationFn: () =>
       apiClient.post('/v1/business/inventory/goods-receipts', {
         reference: reference.trim() || null,
+        supplier_id: supplierId || null,
         lines: lines
           .filter((l) => l.ingredient_id && l.quantity)
           .map((l) => ({
@@ -141,6 +152,7 @@ export default function StockPage() {
       queryClient.invalidateQueries({ queryKey: ['ingredients'] });
       setLines([]);
       setReference('');
+      setSupplierId('');
       setShowReceiving(false);
       toast({ title: 'Delivery recorded', description: 'Expected stock updated.' });
     },
@@ -322,10 +334,34 @@ export default function StockPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="max-w-xs">
-              <Label htmlFor="ref">Delivery note number</Label>
-              <Input id="ref" value={reference} onChange={(e) => setReference(e.target.value)}
-                placeholder="INV-10432" />
+            <div className="flex flex-wrap gap-4">
+              <div className="max-w-xs">
+                <Label htmlFor="ref">Delivery note number</Label>
+                <Input id="ref" value={reference} onChange={(e) => setReference(e.target.value)}
+                  placeholder="INV-10432" />
+              </div>
+              <div className="max-w-xs">
+                <Label htmlFor="supplier">Supplier (optional)</Label>
+                {suppliers && suppliers.length === 0 ? (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    No suppliers set up yet.{' '}
+                    <Link to="/suppliers" className="underline">Add one</Link> to attribute deliveries —
+                    you can still record this delivery without one.
+                  </p>
+                ) : (
+                  <select
+                    id="supplier"
+                    value={supplierId}
+                    onChange={(e) => setSupplierId(e.target.value)}
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="">No supplier recorded</option>
+                    {(suppliers ?? []).map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
             </div>
 
             {lines.map((line, index) => {
