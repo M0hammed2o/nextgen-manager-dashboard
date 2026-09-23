@@ -64,12 +64,13 @@ const SHEETS: Record<Sheet, {
       { name: 'pack_unit', required: false, hint: 'kg, portion, box' },
       { name: 'pack_cost', required: false, hint: 'What one pack costs' },
       { name: 'par_level', required: false, hint: 'Reorder level' },
+      { name: 'opening_quantity', required: false, hint: 'Starting stock, in the unit column above — posts through the ledger, same as the Opening Stock page' },
     ],
     example:
-      'name,unit,unit_label,category,pack_size,pack_unit,pack_cost\n' +
-      'Cheese Portion,portion,portion,Dairy,1,portion,15.00\n' +
-      'Large Dough Ball,portion,portion,Dough,1,portion,6.50\n' +
-      'Flour,g,,Dry Goods,1,kg,18.00\n',
+      'name,unit,unit_label,category,pack_size,pack_unit,pack_cost,opening_quantity\n' +
+      'Cheese Portion,portion,portion,Dairy,1,portion,15.00,20\n' +
+      'Large Dough Ball,portion,portion,Dough,1,portion,6.50,40\n' +
+      'Flour,g,,Dry Goods,1,kg,18.00,15000\n',
   },
   recipes: {
     title: 'Recipes',
