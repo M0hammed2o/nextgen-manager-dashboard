@@ -596,12 +596,25 @@ export interface LoyaltyReward {
   description: string | null;
   points_cost: number;
   is_active: boolean;
+  /**
+   * Cents discount applied at POS checkout when a customer redeems this
+   * reward. `null` means the reward is manual-handover-only — deliberately
+   * NOT selectable at checkout, staff must apply/hand it over by hand. A
+   * reward is only "redeemable at POS" when this is non-null (0 counts as
+   * redeemable, at a R0.00 discount — 0 and null are NOT the same thing).
+   * See routes_loyalty.py LoyaltyRewardResponse / KNOWN_BUGS.md's
+   * `value_cents`-exposure-gap fix (2026-09-23).
+   */
+  value_cents: number | null;
 }
 
 export interface LoyaltyRewardCreate {
   name: string;
   description: string | null;
   points_cost: number;
+  /** Omit/null for a manual-handover-only reward. Never default this to 0 —
+   * that would silently create a real R0.00 till discount. */
+  value_cents: number | null;
 }
 
 export type LoyaltyRewardUpdate = Partial<LoyaltyRewardCreate> & { is_active?: boolean };
@@ -635,6 +648,28 @@ export interface LoyaltyRedeemResponse {
   success: boolean;
   points_delta: number;
   balance_after: number;
+}
+
+/**
+ * POST /customers/{customer_id}/adjust-points body — OWNER/MANAGER-only
+ * manual correction to a customer's points balance (see routes_loyalty.py
+ * LoyaltyAdjustmentRequest / DECISIONS.md DECISION-0034). `points_delta` is
+ * SIGNED: positive credits points, negative debits them, and the backend
+ * refuses zero (`ZERO_ADJUSTMENT`, 422).
+ */
+export interface LoyaltyAdjustmentRequest {
+  points_delta: number;
+  reason: string;
+  idempotency_key?: string;
+}
+
+/** Always trust `balance_after` from this response over any local
+ * arithmetic — it's the backend's authoritative post-adjustment balance. */
+export interface LoyaltyAdjustmentResponse {
+  customer_id: string;
+  points_delta: number;
+  balance_after: number;
+  reason: string | null;
 }
 
 // Assets
