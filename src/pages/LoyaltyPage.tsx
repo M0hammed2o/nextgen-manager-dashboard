@@ -1,15 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import type {
-  LoyaltyProgram, LoyaltyReward, LoyaltyRewardCreate, CustomerLoyalty, LoyaltyRedeemResponse,
+  LoyaltyProgram, LoyaltyReward, LoyaltyRewardCreate, LoyaltyRewardUpdate, CustomerLoyalty,
+  LoyaltyRedeemResponse, LoyaltyAdjustmentRequest, LoyaltyAdjustmentResponse,
 } from '@/types/api';
+import { useAuth } from '@/lib/auth';
+import { formatCents, parseRandsToCents, centsToRandsInput } from '@/lib/mappers';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -17,8 +21,17 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
-import { Gift, Plus, Edit, Trash2, Loader2, Search, Award, Info } from 'lucide-react';
+import { Gift, Plus, Edit, Trash2, Loader2, Search, Award, Info, PlusCircle, MinusCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+
+/** Matches routes_loyalty.py's redeemable rule exactly: a reward is
+ * selectable at checkout only when it has a non-null value_cents (0 counts
+ * as redeemable, at a R0.00 discount — only `null`/missing means
+ * manual-handover-only). Kept as one function so the UI's notion of
+ * "redeemable" can never silently drift from the backend's. */
+function isRedeemableAtPos(valueCents: number | null | undefined): boolean {
+  return valueCents !== null && valueCents !== undefined && valueCents >= 0;
+}
 
 const TIER_VARIANT: Record<string, 'default' | 'secondary' | 'outline'> = {
   BRONZE: 'outline',
@@ -156,10 +169,13 @@ function RewardForm({ reward, onClose }: { reward: LoyaltyReward | null; onClose
   const queryClient = useQueryClient();
   const [name, setName] = useState(reward?.name ?? '');
   const [description, setDescription] = useState(reward?.description ?? '');
-  const [pointsCost, setPointsCost] = useState(reward?.points_cost ?? 100);
+  const [pointsCostInput, setPointsCostInput] = useState(reward ? String(reward.points_cost) : '100');
+  const [valueInput, setValueInput] = useState(reward?.value_cents != null ? centsToRandsInput(reward.value_cents) : '');
+  const [isActive, setIsActive] = useState(reward?.is_active ?? true);
+  const [error, setError] = useState<string | null>(null);
 
   const mutation = useMutation({
-    mutationFn: (data: LoyaltyRewardCreate) =>
+    mutationFn: (data: LoyaltyRewardCreate | LoyaltyRewardUpdate) =>
       reward
         ? apiClient.put<LoyaltyReward>(`/v1/business/loyalty/rewards/${reward.id}`, data)
         : apiClient.post<LoyaltyReward>('/v1/business/loyalty/rewards', data),
@@ -171,9 +187,49 @@ function RewardForm({ reward, onClose }: { reward: LoyaltyReward | null; onClose
     onError: (err: Error) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
   });
 
+  // Live preview of what will actually be saved, so the form never claims a
+  // reward is "redeemable at POS" unless the backend would agree (non-null,
+  // non-negative value_cents on an active reward) — same rule as
+  // isRedeemableAtPos, applied to the in-progress input rather than the
+  // saved record.
+  const trimmedValue = valueInput.trim();
+  const previewValueCents = trimmedValue === '' ? null : parseRandsToCents(trimmedValue);
+  const valueInputIsInvalid = trimmedValue !== '' && previewValueCents === null;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    mutation.mutate({ name, description: description || null, points_cost: pointsCost });
+    setError(null);
+
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setError('Enter a reward name.');
+      return;
+    }
+
+    const trimmedPoints = pointsCostInput.trim();
+    if (!/^\d+$/.test(trimmedPoints) || parseInt(trimmedPoints, 10) < 1) {
+      setError('Points cost must be a whole number of at least 1.');
+      return;
+    }
+    const pointsCost = parseInt(trimmedPoints, 10);
+
+    let valueCents: number | null = null;
+    if (trimmedValue !== '') {
+      const parsed = parseRandsToCents(trimmedValue);
+      if (parsed === null) {
+        setError('Enter a valid reward value in rands (e.g. 50.00), with at most 2 decimal places — or leave it blank for a reward that must be handed over manually.');
+        return;
+      }
+      valueCents = parsed;
+    }
+
+    mutation.mutate({
+      name: trimmedName,
+      description: description.trim() || null,
+      points_cost: pointsCost,
+      value_cents: valueCents,
+      ...(reward ? { is_active: isActive } : {}),
+    });
   };
 
   return (
@@ -190,11 +246,48 @@ function RewardForm({ reward, onClose }: { reward: LoyaltyReward | null; onClose
         <Label htmlFor="reward-points-cost">Points cost</Label>
         <Input
           id="reward-points-cost"
-          type="number" min={1} value={pointsCost}
-          onChange={(e) => setPointsCost(parseInt(e.target.value, 10) || 1)}
+          type="number" step={1} value={pointsCostInput}
+          onChange={(e) => setPointsCostInput(e.target.value)}
           required
         />
       </div>
+      <div className="space-y-2 rounded-lg border border-border p-3">
+        <Label htmlFor="reward-value">Reward value (R) — optional</Label>
+        <Input
+          id="reward-value"
+          inputMode="decimal"
+          value={valueInput}
+          onChange={(e) => setValueInput(e.target.value)}
+          placeholder="e.g. 50.00"
+        />
+        <p className="text-xs text-muted-foreground flex items-start gap-1.5">
+          <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          This is the <span className="font-medium text-foreground mx-1">actual discount applied at the till</span>
+          when a customer redeems this reward. Leave it blank for a reward that has no fixed monetary value and
+          must be handed over manually by staff — it will not be selectable at checkout.
+        </p>
+        {trimmedValue === '' ? (
+          <p className="text-xs font-medium text-muted-foreground">Manual handover only — not selectable at checkout.</p>
+        ) : valueInputIsInvalid ? (
+          <p className="text-xs font-medium text-destructive">Not a valid rand amount yet.</p>
+        ) : (
+          <p className="text-xs font-medium text-foreground">
+            Redeemable at POS for a {formatCents(previewValueCents)} discount.
+          </p>
+        )}
+      </div>
+      {reward && (
+        <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+          <div>
+            <Label htmlFor="reward-active">Active</Label>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Inactive rewards no longer appear in the catalogue or the till lookup — same as removing it.
+            </p>
+          </div>
+          <Switch id="reward-active" checked={isActive} onCheckedChange={setIsActive} />
+        </div>
+      )}
+      {error && <p className="text-sm font-medium text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="outline" type="button" onClick={onClose}>Cancel</Button>
         <Button type="submit" disabled={mutation.isPending}>
@@ -260,6 +353,7 @@ function RewardsCatalogueCard() {
                 <TableHead>Name</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>Points cost</TableHead>
+                <TableHead>Value</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -269,6 +363,16 @@ function RewardsCatalogueCard() {
                   <TableCell className="font-medium">{reward.name}</TableCell>
                   <TableCell className="text-muted-foreground">{reward.description || '—'}</TableCell>
                   <TableCell>{reward.points_cost} pts</TableCell>
+                  <TableCell>
+                    {isRedeemableAtPos(reward.value_cents) ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-foreground">{formatCents(reward.value_cents)}</span>
+                        <StatusBadge variant="default" label="POS redeemable" />
+                      </div>
+                    ) : (
+                      <StatusBadge variant="outline" label="Manual handover only" />
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditing(reward); setShowModal(true); }}>
                       <Edit className="w-3.5 h-3.5" />
@@ -311,9 +415,183 @@ function RewardsCatalogueCard() {
   );
 }
 
+// ── Manual points adjustment (owner/manager only) ────────────────────────────
+
+/**
+ * OWNER/MANAGER-only manual correction to a customer's points balance — see
+ * routes_loyalty.py POST /customers/{id}/adjust-points and DECISIONS.md
+ * DECISION-0034. Mirrors OrderReversalPanel.tsx's role-gating pattern: the
+ * backend enforces `require_owner_or_manager` regardless, `role` here only
+ * controls whether the control is shown at all, so a STAFF user viewing
+ * this dashboard never sees a control that would 403.
+ */
+function PointsAdjustmentPanel({
+  customer,
+  role,
+  onAdjusted,
+}: {
+  customer: CustomerLoyalty;
+  role: string;
+  onAdjusted: (balanceAfter: number) => void;
+}) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [direction, setDirection] = useState<'add' | 'remove'>('add');
+  const [amountInput, setAmountInput] = useState('');
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  // Generated fresh each time the dialog is opened (never regenerated on
+  // every render/keystroke — that would defeat the point of an idempotency
+  // key) so a double-clicked Save replays the same request instead of
+  // applying a second adjustment.
+  const idempotencyKeyRef = useRef<string | null>(null);
+
+  const isManager = role === 'OWNER' || role === 'MANAGER';
+
+  const mutation = useMutation({
+    mutationFn: (body: LoyaltyAdjustmentRequest) =>
+      apiClient.post<LoyaltyAdjustmentResponse>(
+        `/v1/business/loyalty/customers/${customer.customer_id}/adjust-points`,
+        body
+      ),
+  });
+
+  if (!isManager) return null;
+
+  function openDialog() {
+    idempotencyKeyRef.current = crypto.randomUUID();
+    setDirection('add');
+    setAmountInput('');
+    setReason('');
+    setError(null);
+    setOpen(true);
+  }
+
+  function closeDialog() {
+    if (mutation.isPending) return;
+    setOpen(false);
+    idempotencyKeyRef.current = null;
+  }
+
+  async function submit() {
+    setError(null);
+    const trimmedAmount = amountInput.trim();
+    if (!/^\d+$/.test(trimmedAmount) || parseInt(trimmedAmount, 10) < 1) {
+      setError('Enter a whole number of points greater than 0.');
+      return;
+    }
+    const amount = parseInt(trimmedAmount, 10);
+    const trimmedReason = reason.trim();
+    if (trimmedReason.length < 3) {
+      setError('Give a reason (at least 3 characters) — it is recorded on the audit trail.');
+      return;
+    }
+    const pointsDelta = direction === 'add' ? amount : -amount;
+
+    try {
+      const result = await mutation.mutateAsync({
+        points_delta: pointsDelta,
+        reason: trimmedReason,
+        idempotency_key: idempotencyKeyRef.current ?? undefined,
+      });
+      // Always trust the backend's balance_after over any local add/subtract
+      // — never recompute the new balance client-side (see docstring above).
+      onAdjusted(result.balance_after);
+      toast({
+        title: direction === 'add' ? 'Points added' : 'Points removed',
+        description: `${direction === 'add' ? 'Credited' : 'Debited'} ${amount} points. New balance: ${result.balance_after} points. Recorded on the audit trail.`,
+      });
+      setOpen(false);
+      idempotencyKeyRef.current = null;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save that adjustment — try again.');
+    }
+  }
+
+  return (
+    <div className="pt-2 border-t border-border">
+      <Button type="button" variant="outline" size="sm" onClick={openDialog}>
+        Adjust points manually
+      </Button>
+
+      <AlertDialog open={open} onOpenChange={(o) => !o && closeDialog()}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Manually adjust {customer.display_name || customer.phone_number}&apos;s points
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Use this for a correction — e.g. a partial refund that didn&apos;t automatically reverse points, or a
+              customer-service goodwill credit. This is recorded on the audit trail with your name and cannot be
+              undone automatically.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3">
+            <div className="flex gap-2" role="group" aria-label="Adjustment direction">
+              <Button
+                type="button"
+                variant={direction === 'add' ? 'default' : 'outline'}
+                className="flex-1 gap-1.5"
+                onClick={() => setDirection('add')}
+              >
+                <PlusCircle className="w-4 h-4" /> Add points
+              </Button>
+              <Button
+                type="button"
+                variant={direction === 'remove' ? 'default' : 'outline'}
+                className="flex-1 gap-1.5"
+                onClick={() => setDirection('remove')}
+              >
+                <MinusCircle className="w-4 h-4" /> Remove points
+              </Button>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="adjust-amount">Points to {direction === 'add' ? 'add' : 'remove'}</Label>
+              <Input
+                id="adjust-amount"
+                inputMode="numeric"
+                value={amountInput}
+                onChange={(e) => setAmountInput(e.target.value)}
+                placeholder="e.g. 50"
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground">
+                Current balance: {customer.loyalty_points_balance} pts. This will{' '}
+                {direction === 'add' ? 'add points to' : 'remove points from'} that balance — enter a positive
+                number of points regardless of direction; the direction buttons above control the sign.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="adjust-reason">Reason (required)</Label>
+              <Textarea
+                id="adjust-reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                maxLength={255}
+                placeholder="e.g. Partial refund on order BO-000123, points not auto-reversed"
+              />
+            </div>
+            {error && <p className="text-sm font-medium text-destructive">{error}</p>}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={mutation.isPending} onClick={closeDialog}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={mutation.isPending}
+              onClick={(e) => { e.preventDefault(); submit(); }}
+            >
+              {mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Save adjustment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
 // ── Customer lookup + redemption ─────────────────────────────────────────────
 
-function CustomerLookupCard() {
+function CustomerLookupCard({ role }: { role: string }) {
   const { toast } = useToast();
   const [phone, setPhone] = useState('');
   const [customer, setCustomer] = useState<CustomerLoyalty | null>(null);
@@ -430,6 +708,14 @@ function CustomerLookupCard() {
                 </div>
               </div>
             )}
+
+            <PointsAdjustmentPanel
+              customer={customer}
+              role={role}
+              onAdjusted={(balanceAfter) =>
+                setCustomer((prev) => (prev ? { ...prev, loyalty_points_balance: balanceAfter } : prev))
+              }
+            />
           </div>
         )}
       </CardContent>
@@ -440,6 +726,7 @@ function CustomerLookupCard() {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function LoyaltyPage() {
+  const { user } = useAuth();
   const { data: program, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['loyalty-program'],
     queryFn: () => apiClient.get<LoyaltyProgram>('/v1/business/loyalty/program'),
@@ -462,7 +749,7 @@ export default function LoyaltyPage() {
       {program.is_enabled ? (
         <>
           <RewardsCatalogueCard />
-          <CustomerLookupCard />
+          <CustomerLookupCard role={user?.role ?? ''} />
         </>
       ) : (
         <Card>
