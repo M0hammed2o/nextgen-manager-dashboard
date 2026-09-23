@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  BarChart3, Bike, Boxes, ChefHat, ClipboardCheck, CreditCard, Download,
+  BarChart3, Bike, Boxes, Building2, ChefHat, ClipboardCheck, ClipboardList, CreditCard, Download,
   FileUp, Gift, LayoutDashboard, MessageCircle, Package, Receipt, Rocket,
   Settings, ShoppingCart, Sparkles, Trash, TrendingDown, Truck, Users, UtensilsCrossed, Wallet,
 } from 'lucide-react';
@@ -45,6 +45,8 @@ export const navItems: NavItem[] = [
   // DeliverySubNav inside this page, not separate sidebar entries.
   { to: '/settings/delivery', icon: Truck, label: 'Delivery Platforms', requiresDeliveryPlatforms: true },
   { to: '/ingredients', icon: Package, label: 'Ingredients', requiresInventory: true },
+  { to: '/suppliers', icon: Building2, label: 'Suppliers', requiresInventory: true },
+  { to: '/opening-stock', icon: ClipboardList, label: 'Opening Stock', requiresInventory: true },
   { to: '/recipes', icon: ChefHat, label: 'Recipes', requiresInventory: true },
   { to: '/stock', icon: Boxes, label: 'Stock', requiresInventory: true },
   { to: '/stocktake', icon: ClipboardCheck, label: 'Stocktake', requiresInventory: true },

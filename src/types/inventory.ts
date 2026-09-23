@@ -71,6 +71,11 @@ export interface Supplier {
   phone: string | null;
   email: string | null;
   is_active: boolean;
+  // Usage visibility (routes_inventory.py SupplierResponse) — derived live
+  // from goods_receipts, never cached, so deactivation/deletion decisions
+  // are always based on the current picture.
+  goods_receipt_count: number;
+  last_received_at: string | null;
 }
 
 export interface RecipeItem {
@@ -106,6 +111,9 @@ export interface WastageReasonOption {
   requires_note: boolean;
 }
 
+/** WastageResponse.status (routes_wastage.py `_wastage_status`) — the whole lifecycle summary in one field. */
+export type WastageStatus = 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | 'NOT_REQUIRED';
+
 export interface WastageEntry {
   id: string;
   ingredient_id: string;
@@ -117,6 +125,16 @@ export interface WastageEntry {
   value_cents: number;
   requires_approval: boolean;
   approved_by_user_id: string | null;
+  rejected_by_user_id: string | null;
+  rejection_reason: string | null;
+  rejected_at: string | null;
+  status: WastageStatus;
+  logged_by_name: string | null;
+  approved_by_name: string | null;
+  rejected_by_name: string | null;
+  related_order_id: string | null;
+  photo_asset_id: string | null;
+  photo_url: string | null;
   occurred_at: string;
 }
 

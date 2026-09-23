@@ -20,6 +20,8 @@ import IngredientsPage from '@/pages/IngredientsPage';
 import RecipesPage from '@/pages/RecipesPage';
 import StockPage from '@/pages/StockPage';
 import StocktakePage from '@/pages/StocktakePage';
+import SuppliersPage from '@/pages/SuppliersPage';
+import OpeningStockPage from '@/pages/OpeningStockPage';
 import ReceiptSettingsPage from '@/pages/ReceiptSettingsPage';
 import WhatsAppConnectPage from '@/pages/WhatsAppConnectPage';
 import LoyaltyPage from '@/pages/LoyaltyPage';
@@ -67,6 +69,8 @@ const App = () => (
                 <Route path="/recipes" element={<RecipesPage />} />
                 <Route path="/stock" element={<StockPage />} />
                 <Route path="/stocktake" element={<StocktakePage />} />
+                <Route path="/suppliers" element={<SuppliersPage />} />
+                <Route path="/opening-stock" element={<OpeningStockPage />} />
                 <Route path="/settings/receipts" element={<ReceiptSettingsPage />} />
                 <Route path="/settings/whatsapp" element={<WhatsAppConnectPage />} />
                 <Route path="/loyalty" element={<LoyaltyPage />} />
