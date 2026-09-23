@@ -78,6 +78,65 @@ export interface DailyAnalytics {
   messages: number;
 }
 
+// ── Advanced Analytics (NextGen Complete and above — migration 0047,
+//    gated server-side by Business.advanced_analytics_enabled). Matches
+//    backend/app/api/v1/routes_analytics.py's AverageOrderValue/
+//    PaymentMethodBreakdown/PaymentMethodsReport response models exactly. ──
+
+export interface AverageOrderValue {
+  period: string;
+  completed_orders: number;
+  net_cents: number;
+  /** 0 when completed_orders is 0 — never a divide-by-zero on the backend. */
+  average_order_value_cents: number;
+}
+
+export interface PaymentMethodBreakdown {
+  /** e.g. "CASH" | "CARD" | "UNKNOWN" (NULL payment_method coalesced server-side) — no fixed enum, render whatever comes back. */
+  payment_method: string;
+  order_count: number;
+  gross_cents: number;
+  vat_cents: number;
+  refunds_cents: number;
+  net_cents: number;
+}
+
+export interface PaymentMethodsReport {
+  days: number;
+  since: string;
+  methods: PaymentMethodBreakdown[];
+  total_orders: number;
+  total_gross_cents: number;
+  total_refunds_cents: number;
+  total_net_cents: number;
+}
+
+// Matches the dict shape returned by GET /business/external-orders/channels
+// (routes_external_orders.py::channel_breakdown) — no dedicated Pydantic
+// response model on the backend, so this type is hand-derived from that
+// route's literal return dict.
+export interface ChannelBreakdown {
+  source: string;
+  label: string;
+  is_external: boolean;
+  order_count: number;
+  gross_cents: number;
+  vat_cents: number;
+  refunds_cents: number;
+  net_cents: number;
+}
+
+export interface ChannelsReport {
+  days: number;
+  since: string;
+  channels: ChannelBreakdown[];
+  total_orders: number;
+  total_gross_cents: number;
+  total_refunds_cents: number;
+  total_net_cents: number;
+  external_gross_cents: number;
+}
+
 // Orders — matches backend OrderResponse exactly
 export type OrderStatus = 'NEW' | 'ACCEPTED' | 'IN_PROGRESS' | 'READY' | 'COLLECTED' | 'DELIVERED' | 'CANCELLED';
 
@@ -393,6 +452,16 @@ export interface BusinessSettings {
   delivery_platforms_enabled: boolean;
   uber_eats_enabled: boolean;
   mrd_enabled: boolean;
+  // Advanced Analytics entitlement (migration 0047) — platform-admin-set,
+  // business-plane READ-ONLY, same pattern as inventory_enabled/
+  // delivery_platforms_enabled above. Gates GET /business/analytics/
+  // average-order-value, /business/analytics/payment-methods, and
+  // /business/external-orders/channels (routes_analytics.py,
+  // routes_external_orders.py; backend/app/analytics/revenue.py::
+  // require_advanced_analytics_enabled). A false value does NOT affect
+  // Core Analytics (/summary, /top-items, /daily), which stays available
+  // on every plan.
+  advanced_analytics_enabled: boolean;
 }
 
 // WhatsApp pause/busy toggle

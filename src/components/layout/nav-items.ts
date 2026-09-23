@@ -50,6 +50,14 @@ export const navItems: NavItem[] = [
   { to: '/stocktake', icon: ClipboardCheck, label: 'Stocktake', requiresInventory: true },
   { to: '/variance', icon: TrendingDown, label: 'Variance', requiresInventory: true },
   { to: '/wastage', icon: Trash, label: 'Wastage', requiresInventory: true },
+  // Deliberately ungated here: Core Analytics (summary/top-items/daily) is
+  // available on every plan, including POS-only tenants. Advanced Analytics
+  // (average order value, payment method split, delivery channel breakdown
+  // — Business.advanced_analytics_enabled, migration 0047) is a section
+  // *within* this same page, not a separate route, so it's gated inline by
+  // AnalyticsPage.tsx/src/lib/entitlements.ts instead of at the nav level —
+  // hiding this whole nav item would also hide Core Analytics for a
+  // non-entitled tenant, which is wrong.
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
   { to: '/loyalty', icon: Gift, label: 'Loyalty' },
   { to: '/settings', icon: Settings, label: 'Settings' },
