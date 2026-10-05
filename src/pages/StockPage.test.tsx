@@ -83,6 +83,68 @@ const BASE_GETS = {
 describe('StockPage — record a delivery: supplier attribution', () => {
   afterEach(() => vi.clearAllMocks());
 
+  // ── BUG-0112: the idempotency key must actually be SENT ─────────────────
+  // The backend's partial unique index on (business_id, idempotency_key) is
+  // inert unless the client sends a key, and the bug it closes is a request
+  // that reached the server, appeared to time out, and was resubmitted.
+  async function fillOneDeliveryLine() {
+    fireEvent.click(await screen.findByRole('button', { name: /record a delivery/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add line/i }));
+    const sel = screen.getByText(/choose ingredient…/i).closest('select')!;
+    fireEvent.change(sel, { target: { value: 'ing-1' } });
+    fireEvent.change(screen.getByPlaceholderText(/how many/i), { target: { value: '10' } });
+  }
+  const keyOfCall = (i: number) =>
+    (vi.mocked(apiClient.post).mock.calls[i] as [string, { idempotency_key?: string }])[1]
+      .idempotency_key;
+
+  it('sends an idempotency_key with the goods receipt (BUG-0112)', async () => {
+    mockGet({ ...BASE_GETS, '/v1/business/inventory/suppliers': [SUPPLIER] });
+    vi.mocked(apiClient.post).mockResolvedValue({});
+    renderWithProviders(<StockPage />);
+    await fillOneDeliveryLine();
+    fireEvent.click(screen.getByRole('button', { name: /^record delivery$/i }));
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledTimes(1));
+    expect(keyOfCall(0), 'a goods receipt must carry an idempotency key').toBeTruthy();
+  });
+
+  it('reuses the SAME key when a failed submit is retried (BUG-0112)', async () => {
+    // A retry after a failure must replay the original request rather than
+    // create a second receipt, so the key must NOT be regenerated.
+    mockGet({ ...BASE_GETS, '/v1/business/inventory/suppliers': [SUPPLIER] });
+    vi.mocked(apiClient.post)
+      .mockRejectedValueOnce(new Error('network timeout'))
+      .mockResolvedValueOnce({});
+    renderWithProviders(<StockPage />);
+    await fillOneDeliveryLine();
+    fireEvent.click(screen.getByRole('button', { name: /^record delivery$/i }));
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: /^record delivery$/i }));
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledTimes(2));
+    expect(keyOfCall(0)).toBeTruthy();
+    expect(keyOfCall(1), 'a retry must replay the ORIGINAL key').toBe(keyOfCall(0));
+  });
+
+  it('mints a FRESH key for the next delivery after a successful one (BUG-0112)', async () => {
+    // The mirror risk of the retry case: if the key were NOT cleared on
+    // success, a second genuine delivery would reuse the first key and the
+    // backend would replay the original receipt — silently losing a real
+    // delivery. Clearing on success (and only on success) is what prevents
+    // that, so pin it.
+    mockGet({ ...BASE_GETS, '/v1/business/inventory/suppliers': [SUPPLIER] });
+    vi.mocked(apiClient.post).mockResolvedValue({});
+    renderWithProviders(<StockPage />);
+    await fillOneDeliveryLine();
+    fireEvent.click(screen.getByRole('button', { name: /^record delivery$/i }));
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledTimes(1));
+    await fillOneDeliveryLine();
+    fireEvent.click(screen.getByRole('button', { name: /^record delivery$/i }));
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledTimes(2));
+    expect(keyOfCall(0)).toBeTruthy();
+    expect(keyOfCall(1)).toBeTruthy();
+    expect(keyOfCall(1), 'a NEW delivery must get a NEW key').not.toBe(keyOfCall(0));
+  });
+
   it('submits the chosen supplier_id alongside the delivery lines', async () => {
     mockGet({
       ...BASE_GETS,

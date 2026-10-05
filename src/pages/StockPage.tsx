@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
@@ -133,9 +133,24 @@ export default function StockPage() {
     enabled: !!drillDown,
   });
 
+  // BUG-0112. The backend now enforces goods-receipt idempotency with a
+  // partial unique index on (business_id, idempotency_key), but the protection
+  // is inert unless the client actually sends a key — and the bug this closes
+  // is precisely a request that REACHED the server, appeared to time out, and
+  // was resubmitted. Minted once per delivery entry (never on each render or
+  // keystroke, which would defeat the point) and cleared only once the receipt
+  // is confirmed, so a retry of a timed-out submit replays the original
+  // receipt instead of double-counting the stock. Same pattern as
+  // LoyaltyPage.tsx's manual points adjustment.
+  const receiptIdempotencyKeyRef = useRef<string | null>(null);
+
   const receiveMutation = useMutation({
-    mutationFn: () =>
-      apiClient.post('/v1/business/inventory/goods-receipts', {
+    mutationFn: () => {
+      if (!receiptIdempotencyKeyRef.current) {
+        receiptIdempotencyKeyRef.current = crypto.randomUUID();
+      }
+      return apiClient.post('/v1/business/inventory/goods-receipts', {
+        idempotency_key: receiptIdempotencyKeyRef.current,
         reference: reference.trim() || null,
         supplier_id: supplierId || null,
         lines: lines
@@ -146,8 +161,12 @@ export default function StockPage() {
             unit: l.unit,
             unit_cost_cents: l.cost ? Math.round(parseFloat(l.cost) * 100) : null,
           })),
-      }),
+      });
+    },
     onSuccess: () => {
+      // Only clear once the receipt is confirmed. Clearing on error would hand
+      // a retry a NEW key, which is exactly the duplicate this guards against.
+      receiptIdempotencyKeyRef.current = null;
       queryClient.invalidateQueries({ queryKey: ['live-stock'] });
       queryClient.invalidateQueries({ queryKey: ['ingredients'] });
       setLines([]);
