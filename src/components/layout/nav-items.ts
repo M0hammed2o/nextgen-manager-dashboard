@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3, Bike, Boxes, Building2, ChefHat, ClipboardCheck, ClipboardList, CreditCard, Download,
   FileUp, Gift, LayoutDashboard, MessageCircle, Package, Receipt, Rocket,
-  Settings, ShoppingCart, Sparkles, Trash, TrendingDown, Truck, Users, UtensilsCrossed, Wallet,
+  Palette, Settings, ShoppingCart, Sparkles, Trash, TrendingDown, Truck, Users, UtensilsCrossed, Wallet,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -72,6 +72,7 @@ export const navItems: NavItem[] = [
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
   { to: '/loyalty', icon: Gift, label: 'Loyalty', requiresLoyalty: true },
   { to: '/settings', icon: Settings, label: 'Settings' },
+  { to: '/settings/branding', icon: Palette, label: 'Branding' },
   { to: '/settings/receipts', icon: Receipt, label: 'Receipts' },
   { to: '/settings/billing', icon: CreditCard, label: 'Billing' },
   { to: '/settings/whatsapp', icon: MessageCircle, label: 'WhatsApp', requiresWhatsapp: true },

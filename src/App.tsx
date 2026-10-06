@@ -25,6 +25,7 @@ import StocktakePage from '@/pages/StocktakePage';
 import SuppliersPage from '@/pages/SuppliersPage';
 import OpeningStockPage from '@/pages/OpeningStockPage';
 import ReceiptSettingsPage from '@/pages/ReceiptSettingsPage';
+import BrandingPage from '@/pages/BrandingPage';
 import WhatsAppConnectPage from '@/pages/WhatsAppConnectPage';
 import LoyaltyPage from '@/pages/LoyaltyPage';
 import SetupPage from '@/pages/SetupPage';
@@ -79,6 +80,7 @@ const App = () => (
                 <Route path="/suppliers" element={<SuppliersPage />} />
                 <Route path="/opening-stock" element={<OpeningStockPage />} />
                 <Route path="/settings/receipts" element={<ReceiptSettingsPage />} />
+                <Route path="/settings/branding" element={<BrandingPage />} />
                 <Route path="/settings/whatsapp" element={<WhatsAppConnectPage />} />
                 <Route path="/loyalty" element={<LoyaltyPage />} />
                 <Route path="/setup" element={<SetupPage />} />
