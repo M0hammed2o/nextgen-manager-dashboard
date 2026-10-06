@@ -13,6 +13,16 @@ export default {
       },
     },
     extend: {
+      boxShadow: {
+        sm: "var(--shadow-sm)",
+        md: "var(--shadow-md)",
+        lg: "var(--shadow-lg)",
+      },
+      transitionDuration: {
+        fast: "var(--motion-fast)",
+        base: "var(--motion-base)",
+        slow: "var(--motion-slow)",
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -50,6 +60,32 @@ export default {
         success: {
           DEFAULT: "hsl(var(--success))",
           foreground: "hsl(var(--success-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
+        },
+        /* UI V2 brand scale. `primary` already follows the restaurant at
+           runtime (BrandProvider aliases --primary), so these exist for the
+           cases that need the brand EXPLICITLY and must not be re-coloured
+           by a future change to what `primary` means: active nav, selected
+           category, brand-tinted surfaces, chart accents. */
+        brand: {
+          DEFAULT: "hsl(var(--brand-primary))",
+          hover: "hsl(var(--brand-primary-hover))",
+          active: "hsl(var(--brand-primary-active))",
+          soft: "hsl(var(--brand-primary-soft))",
+          border: "hsl(var(--brand-primary-border))",
+          foreground: "hsl(var(--brand-on-primary))",
+          raw: "hsl(var(--brand-raw))",
+        },
+        surface: {
+          DEFAULT: "hsl(var(--bg-surface))",
+          elevated: "hsl(var(--bg-elevated))",
         },
         warning: {
           DEFAULT: "hsl(var(--warning))",
