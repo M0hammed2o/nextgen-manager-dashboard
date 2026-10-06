@@ -375,8 +375,20 @@ export interface CreateStaffRequest {
 // Business Settings — matches backend BusinessSettingsResponse
 export interface BusinessSettings {
   id: string;
+  /** Legal/registered name — what NextGen's commercial invoices bill. */
   name: string;
   slug: string;
+  // ── UI V2 restaurant branding (migration 0053) ──────────────────────────
+  /** Trading name shown in the UI. Falls back to `name` when unset. */
+  brand_display_name: string | null;
+  brand_primary_colour: string | null;
+  brand_accent_colour: string | null;
+  brand_theme: string;
+  logo_asset_id: string | null;
+  /** Resolved public URL for logo_asset_id, or null. */
+  logo_url: string | null;
+  brand_icon_asset_id: string | null;
+  brand_icon_url: string | null;
   business_code: string;
   timezone: string;
   business_hours: Record<string, { open: string; close: string } | null> | null;

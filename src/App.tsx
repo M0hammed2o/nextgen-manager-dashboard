@@ -4,6 +4,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/lib/auth";
+import { BrandProvider } from "@/lib/brand-provider";
+import { BrandSync } from "@/components/BrandSync";
 import { ThemeProvider } from "@/lib/theme";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import LoginPage from "./pages/Login";
@@ -50,6 +52,11 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <AuthProvider>
+        {/* Inside AuthProvider (branding is per-restaurant) and outside the
+            router, so the restaurant's colours are on <html> before the first
+            route paints rather than flashing NextGen's defaults first. */}
+        <BrandProvider>
+        <BrandSync />
         <TooltipProvider>
           <Toaster />
           <BrowserRouter>
@@ -88,6 +95,7 @@ const App = () => (
             </Routes>
           </BrowserRouter>
         </TooltipProvider>
+        </BrandProvider>
       </AuthProvider>
     </ThemeProvider>
   </QueryClientProvider>

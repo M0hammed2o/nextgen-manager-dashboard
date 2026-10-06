@@ -1,12 +1,15 @@
 import { useAuth } from '@/lib/auth';
 import { useTheme } from '@/lib/theme';
 import { Sun, Moon, LogOut, Menu, ExternalLink } from 'lucide-react';
+import { RestaurantMark } from '@/components/RestaurantIdentity';
+import { useBrand } from '@/lib/brand-provider';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { MobileSidebar } from './MobileSidebar';
 
 export function TopBar() {
   const { user, logout } = useAuth();
+  const { displayName, branchName } = useBrand();
   const { theme, toggleTheme } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -20,9 +23,25 @@ export function TopBar() {
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div>
-            <h2 className="text-sm font-semibold text-foreground">{user?.business_name ?? 'Dashboard'}</h2>
-            <p className="text-xs text-muted-foreground capitalize">{user?.role?.toLowerCase() ?? ''} · {user?.staff_name ?? ''}</p>
+          {/* The restaurant leads here too, exactly as on the till: an owner
+              opening the dashboard should see their own business, not a
+              generic product chrome. RestaurantMark degrades logo ->
+              monogram -> neutral, so a tenant with no branding configured
+              still gets a deliberate header.
+
+              A future branch selector drops in beside the name without
+              restructuring this row -- the name and branch already sit in
+              their own column. No fake branch switching is rendered today,
+              because no multi-branch backend exists. */}
+          <RestaurantMark size="sm" />
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold text-foreground">
+              {displayName?.trim() || user?.business_name || 'Dashboard'}
+            </h2>
+            <p className="truncate text-xs capitalize text-muted-foreground">
+              {branchName ? `${branchName} · ` : ''}
+              {user?.role?.toLowerCase() ?? ''} · {user?.staff_name ?? ''}
+            </p>
           </div>
         </div>
 
