@@ -184,11 +184,17 @@
 }
 
 @layer utilities {
+  /* Keeps fixed bottom chrome clear of a phone's home indicator. Without it
+     the last row of touch targets sits under the system gesture area. */
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
   .glass-card {
     @apply bg-card/80 backdrop-blur-sm border border-border/50 rounded-lg;
   }
   .stat-card {
-    @apply bg-card border border-border rounded-xl p-6 transition-all hover:shadow-md hover:border-primary/20;
+    @apply bg-card border border-border rounded-xl p-4 sm:p-6 transition-all duration-base hover:shadow-md hover:border-brand-border;
   }
   .sidebar-item {
     @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all;

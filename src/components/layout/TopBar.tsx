@@ -1,28 +1,24 @@
 import { useAuth } from '@/lib/auth';
 import { useTheme } from '@/lib/theme';
-import { Sun, Moon, LogOut, Menu, ExternalLink } from 'lucide-react';
+import { Sun, Moon, LogOut, ExternalLink } from 'lucide-react';
 import { RestaurantMark } from '@/components/RestaurantIdentity';
 import { useBrand } from '@/lib/brand-provider';
 import { Button } from '@/components/ui/button';
-import { useState } from 'react';
-import { MobileSidebar } from './MobileSidebar';
 
 export function TopBar() {
   const { user, logout } = useAuth();
   const { displayName, branchName } = useBrand();
   const { theme, toggleTheme } = useTheme();
-  const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
     <>
       <header className="h-16 border-b border-border bg-card flex items-center justify-between px-4 md:px-6">
         <div className="flex items-center gap-3">
-          <button
-            className="md:hidden p-2 rounded-lg hover:bg-accent text-muted-foreground"
-            onClick={() => setMobileOpen(true)}
-          >
-            <Menu className="w-5 h-5" />
-          </button>
+          {/* The hamburger and this component's own MobileSidebar instance
+              were removed when MobileBottomNav shipped: its "More" tab opens
+              the same drawer at the same breakpoint, and two affordances
+              driving two SEPARATE drawer instances is duplication. The drawer
+              now lives once, in DashboardLayout. */}
           {/* The restaurant leads here too, exactly as on the till: an owner
               opening the dashboard should see their own business, not a
               generic product chrome. RestaurantMark degrades logo ->
@@ -59,7 +55,6 @@ export function TopBar() {
           </Button>
         </div>
       </header>
-      <MobileSidebar open={mobileOpen} onClose={() => setMobileOpen(false)} />
     </>
   );
 }

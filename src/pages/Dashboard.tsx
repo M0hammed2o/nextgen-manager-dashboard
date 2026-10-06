@@ -73,14 +73,14 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4 sm:gap-4">
         <StatCard label="Total Orders" value={summary.totalOrders} icon={<ShoppingCart className="w-5 h-5" />} />
         <StatCard label="Revenue" value={formatCurrency(summary.revenue)} icon={<DollarSign className="w-5 h-5" />} />
         <StatCard label="Completed" value={summary.completedOrders} icon={<CheckCircle className="w-5 h-5" />} />
         <StatCard label="Cancelled" value={summary.cancelledOrders} icon={<XCircle className="w-5 h-5" />} />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4 sm:gap-4">
         <StatCard label="Messages" value={summary.totalMessages} icon={<MessageSquare className="w-5 h-5" />} />
         <StatCard label="LLM Calls" value={summary.llmCalls} icon={<Cpu className="w-5 h-5" />} />
         <StatCard label="LLM Cost" value={formatCurrency(summary.llmCost)} icon={<DollarSign className="w-5 h-5" />} />
