@@ -225,7 +225,10 @@ export function DigitalReceiptsSection() {
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Matches the LOADED layout below (grid-cols-1 sm:grid-cols-3). A
+                flat grid-cols-3 here put three cramped tiles side-by-side on a
+                phone, then reflowed to one column once the data arrived. */}
             {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
           </div>
         ) : notEnabled ? (
