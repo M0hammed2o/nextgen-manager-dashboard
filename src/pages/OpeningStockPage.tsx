@@ -354,12 +354,12 @@ export default function OpeningStockPage() {
                           </td>
                           <td className="px-3 py-2">
                             {status === 'saved' && (
-                              <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-600">
+                              <span className="flex items-center gap-1.5 text-xs font-medium text-success">
                                 <CheckCircle2 className="h-3.5 w-3.5" /> {message}
                               </span>
                             )}
                             {status === 'duplicate' && (
-                              <span className="flex items-start gap-1.5 text-xs font-medium text-amber-600">
+                              <span className="flex items-start gap-1.5 text-xs font-medium text-warning">
                                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-none" /> {message}
                               </span>
                             )}

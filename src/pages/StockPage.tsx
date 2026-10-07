@@ -274,9 +274,9 @@ export default function StockPage() {
       </div>
 
       {externalStatus?.any_stale && (
-        <Card className="border-amber-500/50">
+        <Card className="border-warning/50">
           <CardContent className="flex items-start gap-3 py-4">
-            <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-amber-500" />
+            <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-warning" />
             <div className="min-w-0">
               <p className="text-sm font-medium">
                 Expected stock may be overstated — delivery sales are not fully imported
@@ -301,9 +301,9 @@ export default function StockPage() {
       )}
 
       {!!recipeCoverage?.missing && (
-        <Card className="border-amber-500/50">
+        <Card className="border-warning/50">
           <CardContent className="flex items-start gap-3 py-4">
-            <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-amber-500" />
+            <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-warning" />
             <div className="min-w-0">
               <p className="text-sm font-medium">
                 {recipeCoverage.missing} menu item{recipeCoverage.missing === 1 ? '' : 's'} {recipeCoverage.missing === 1 ? 'has' : 'have'} no recipe
@@ -334,7 +334,7 @@ export default function StockPage() {
             <p className="mt-1 text-2xl font-bold tabular-nums">{live?.ingredient_count ?? 0}</p>
           </CardContent>
         </Card>
-        <Card className={live?.needs_attention_count ? 'border-amber-500/50' : undefined}>
+        <Card className={live?.needs_attention_count ? 'border-warning/50' : undefined}>
           <CardContent className="py-4">
             <p className="text-xs uppercase text-muted-foreground">Need a look</p>
             <p className="mt-1 text-2xl font-bold tabular-nums">
@@ -582,13 +582,13 @@ export default function StockPage() {
                     key={row.ingredient_id}
                     onClick={() => setDrillDown(row)}
                     className={`cursor-pointer border-b last:border-0 hover:bg-muted/50 ${
-                      row.needs_attention ? 'bg-amber-500/5' : ''
+                      row.needs_attention ? 'bg-warning/5' : ''
                     }`}
                   >
                     <td className="px-3 py-2 font-medium">
                       <span className="flex items-center gap-2">
                         {row.needs_attention && (
-                          <AlertTriangle className="h-3.5 w-3.5 flex-none text-amber-500" />
+                          <AlertTriangle className="h-3.5 w-3.5 flex-none text-warning" />
                         )}
                         {row.name}
                       </span>
@@ -604,7 +604,7 @@ export default function StockPage() {
                     <td className="px-3 py-2 font-semibold tabular-nums">
                       {row.expected_display}
                       {row.below_par && (
-                        <span className="ml-2 text-xs font-normal text-amber-600">low</span>
+                        <span className="ml-2 text-xs font-normal text-warning">low</span>
                       )}
                     </td>
                     <td className="px-3 py-2 tabular-nums text-muted-foreground">
@@ -694,7 +694,7 @@ export default function StockPage() {
                               )}
                             </td>
                             <td className={`px-3 py-2 text-right tabular-nums ${
-                              m.quantity_milli < 0 ? 'text-destructive' : 'text-emerald-600'
+                              m.quantity_milli < 0 ? 'text-destructive' : 'text-success'
                             }`}>
                               {m.quantity_milli > 0 ? '+' : ''}
                               {(m.quantity_milli / 1000).toLocaleString()}

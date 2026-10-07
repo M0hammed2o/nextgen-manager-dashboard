@@ -46,8 +46,8 @@ export default function SetupPage() {
   if (!data) return null;
 
   const icon = (status: string) =>
-    status === 'done' ? <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-      : status === 'partial' ? <AlertCircle className="h-5 w-5 text-amber-500" />
+    status === 'done' ? <CheckCircle2 className="h-5 w-5 text-success" />
+      : status === 'partial' ? <AlertCircle className="h-5 w-5 text-warning" />
         : <Circle className="h-5 w-5 text-muted-foreground" />;
 
   const outstanding = data.steps.filter((s) => s.status !== 'done' && s.required_to_trade);
@@ -70,7 +70,7 @@ export default function SetupPage() {
             </div>
             <div className="text-right">
               {data.ready_to_trade ? (
-                <p className="flex items-center gap-2 font-medium text-emerald-600">
+                <p className="flex items-center gap-2 font-medium text-success">
                   <CheckCircle2 className="h-5 w-5" /> Ready to trade
                 </p>
               ) : (
@@ -124,8 +124,8 @@ export default function SetupPage() {
                   <p className="text-sm text-muted-foreground">{step.description}</p>
                   <p className="mt-1 text-sm">
                     <span className={
-                      step.status === 'done' ? 'text-emerald-600'
-                        : step.status === 'partial' ? 'text-amber-600'
+                      step.status === 'done' ? 'text-success'
+                        : step.status === 'partial' ? 'text-warning'
                           : 'text-muted-foreground'
                     }>
                       {step.detail}
@@ -134,7 +134,7 @@ export default function SetupPage() {
                   {step.total > 0 && step.status !== 'done' && (
                     <div className="mt-2 h-1.5 w-40 overflow-hidden rounded-full bg-muted">
                       <div
-                        className="h-full rounded-full bg-amber-500"
+                        className="h-full rounded-full bg-warning"
                         style={{ width: `${Math.round((step.count / step.total) * 100)}%` }}
                       />
                     </div>

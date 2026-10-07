@@ -244,13 +244,13 @@ export default function RecipesPage() {
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-lg border p-3">
                 <p className="text-xs uppercase text-muted-foreground">Ready</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-600">
+                <p className="mt-1 text-2xl font-bold tabular-nums text-success">
                   {coverage.complete}
                 </p>
               </div>
               <div className="rounded-lg border p-3">
                 <p className="text-xs uppercase text-muted-foreground">Some sizes missing</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-amber-600">
+                <p className="mt-1 text-2xl font-bold tabular-nums text-warning">
                   {coverage.incomplete}
                 </p>
               </div>
@@ -283,7 +283,7 @@ export default function RecipesPage() {
                               <XCircle className="h-3.5 w-3.5" /> No recipe
                             </span>
                           ) : (
-                            <span className="flex items-center gap-1.5 text-amber-600">
+                            <span className="flex items-center gap-1.5 text-warning">
                               <AlertTriangle className="h-3.5 w-3.5" /> Incomplete
                             </span>
                           )}
@@ -303,7 +303,7 @@ export default function RecipesPage() {
             )}
 
             {coverage.items.length > 0 && coverage.missing === 0 && coverage.incomplete === 0 && (
-              <p className="flex items-center gap-2 text-sm text-emerald-600">
+              <p className="flex items-center gap-2 text-sm text-success">
                 <CheckCircle2 className="h-4 w-4" />
                 Every menu item has a complete recipe.
               </p>

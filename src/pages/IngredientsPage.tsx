@@ -259,9 +259,9 @@ export default function IngredientsPage() {
       </div>
 
       {belowPar.length > 0 && (
-        <Card className="border-amber-500/40">
+        <Card className="border-warning/40">
           <CardContent className="flex items-start gap-3 py-4">
-            <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-amber-500" />
+            <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-warning" />
             <div>
               <p className="text-sm font-medium">
                 {belowPar.length} ingredient{belowPar.length === 1 ? ' is' : 's are'} below par level
@@ -493,10 +493,10 @@ export default function IngredientsPage() {
                     <tr key={item.id} className="border-b last:border-0">
                       <td className="px-4 py-3 font-medium">{item.name}</td>
                       <td className="px-4 py-3">
-                        <span className={item.below_par ? 'font-semibold text-amber-600' : ''}>
+                        <span className={item.below_par ? 'font-semibold text-warning' : ''}>
                           {item.on_hand_display}
                         </span>
-                        {item.below_par && <span className="ml-2 text-xs text-amber-600">low</span>}
+                        {item.below_par && <span className="ml-2 text-xs text-warning">low</span>}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {item.unit_label

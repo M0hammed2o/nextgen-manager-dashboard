@@ -411,7 +411,7 @@ export default function StocktakePage() {
                             line.variance_quantity_milli < 0
                               ? 'text-destructive'
                               : line.variance_quantity_milli > 0
-                              ? 'text-emerald-600'
+                              ? 'text-success'
                               : ''
                           }`}
                         >

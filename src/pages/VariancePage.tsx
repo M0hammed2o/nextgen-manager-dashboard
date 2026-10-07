@@ -155,7 +155,7 @@ export default function VariancePage() {
             <Card>
               <CardContent className="py-4">
                 <p className="text-xs uppercase text-muted-foreground">Counted over</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-600">
+                <p className="mt-1 text-2xl font-bold tabular-nums text-success">
                   {formatCurrency(
                     surpluses.reduce((s, l) => s + l.variance_value_cents, 0) / 100
                   )}
@@ -223,7 +223,7 @@ export default function VariancePage() {
                         <td className="px-3 py-2 tabular-nums">{line.counted_display ?? '—'}</td>
                         <td className={`px-3 py-2 tabular-nums ${
                           line.variance_quantity_milli < 0 ? 'text-destructive'
-                            : line.variance_quantity_milli > 0 ? 'text-emerald-600' : ''
+                            : line.variance_quantity_milli > 0 ? 'text-success' : ''
                         }`}>
                           {line.variance_quantity_milli > 0 ? '+' : ''}{line.variance_display}
                         </td>

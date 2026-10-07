@@ -349,7 +349,7 @@ export default function WastagePage() {
 
 function StatusBadge({ status }: { status: WastageStatus }) {
   const styles: Record<WastageStatus, string> = {
-    PENDING_APPROVAL: 'bg-amber-500/10 text-amber-600',
+    PENDING_APPROVAL: 'bg-warning/10 text-warning',
     APPROVED: 'bg-success/10 text-[hsl(var(--success))]',
     REJECTED: 'bg-destructive/10 text-destructive',
     NOT_REQUIRED: 'bg-muted text-muted-foreground',

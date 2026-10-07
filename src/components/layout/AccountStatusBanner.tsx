@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 
 const SEVERITY_CLASSES: Record<string, string> = {
   info: 'border-border bg-muted text-foreground',
-  amber: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  amber: 'border-warning/30 bg-warning/10 text-warning dark:text-warning',
   red: 'border-destructive/30 bg-destructive/10 text-destructive',
 };
 

@@ -75,8 +75,8 @@ export function WhatsAppPauseBanner() {
     : null;
 
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm md:px-6">
-      <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+    <div className="flex items-center justify-between gap-3 border-b border-warning/30 bg-warning/10 px-4 py-2 text-sm md:px-6">
+      <div className="flex items-center gap-2 text-warning dark:text-warning">
         <PauseCircle className="h-4 w-4 shrink-0" />
         <span>
           WhatsApp ordering paused

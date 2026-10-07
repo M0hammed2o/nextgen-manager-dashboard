@@ -382,7 +382,7 @@ function AddOnsTab({ addOns, items }: { addOns: MenuAddOn[]; items: MenuItem[] }
                     {count > 0 ? (
                       <span className="text-primary">{count} item{count !== 1 ? 's' : ''}</span>
                     ) : (
-                      <span className="text-amber-500">Not attached to any item</span>
+                      <span className="text-warning">Not attached to any item</span>
                     )}
                   </div>
                 </div>

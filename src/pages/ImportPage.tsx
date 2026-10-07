@@ -359,7 +359,7 @@ export default function ImportPage() {
                 </CardDescription>
               </div>
               {preview.error_count === 0 ? (
-                <span className="flex items-center gap-1.5 text-sm font-medium text-emerald-600">
+                <span className="flex items-center gap-1.5 text-sm font-medium text-success">
                   <CheckCircle2 className="h-4 w-4" /> Looks good
                 </span>
               ) : (
@@ -417,7 +417,7 @@ export default function ImportPage() {
                           {formatCurrency(row.price_cents / 100)}
                         </td>
                         <td className="px-3 py-2">
-                          <span className={row.action === 'create' ? 'text-emerald-600' : 'text-muted-foreground'}>
+                          <span className={row.action === 'create' ? 'text-success' : 'text-muted-foreground'}>
                             {row.action === 'create' ? 'New' : 'Update'}
                           </span>
                         </td>

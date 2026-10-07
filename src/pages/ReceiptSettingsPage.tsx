@@ -484,7 +484,7 @@ export default function ReceiptSettingsPage() {
                 <div className="mt-2 text-center">{form.footer_message}</div>
               )}
               {form.qr_data && (
-                <div className="mt-2 text-center text-[10px] text-neutral-500">[ QR code ]</div>
+                <div className="mt-2 text-center text-[10px] text-muted-foreground">[ QR code ]</div>
               )}
             </div>
 

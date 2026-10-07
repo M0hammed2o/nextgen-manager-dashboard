@@ -275,9 +275,9 @@ export default function ExternalOrdersPage() {
 
       {/* Freshness — the whole reason this screen leads with status */}
       {status?.stock_warning && (
-        <Card className="border-amber-500/50">
+        <Card className="border-warning/50">
           <CardContent className="flex items-start gap-3 py-4">
-            <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-amber-500" />
+            <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-warning" />
             <div>
               <p className="text-sm font-medium">{status.stock_warning}</p>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -291,15 +291,15 @@ export default function ExternalOrdersPage() {
 
       <div className="grid gap-4 sm:grid-cols-3">
         {(status?.platforms ?? []).map((p) => (
-          <Card key={p.platform} className={p.is_stale && p.ever_imported ? 'border-amber-500/50' : undefined}>
+          <Card key={p.platform} className={p.is_stale && p.ever_imported ? 'border-warning/50' : undefined}>
             <CardContent className="py-4">
               <div className="flex items-start justify-between gap-2">
                 <p className="font-medium">{p.label}</p>
                 {p.ever_imported ? (
                   p.is_stale ? (
-                    <Clock className="h-4 w-4 text-amber-500" />
+                    <Clock className="h-4 w-4 text-warning" />
                   ) : (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    <CheckCircle2 className="h-4 w-4 text-success" />
                   )
                 ) : (
                   <AlertTriangle className="h-4 w-4 text-muted-foreground" />
@@ -316,7 +316,7 @@ export default function ExternalOrdersPage() {
                     {formatCurrency(p.total_gross_cents_all_time / 100)} all time
                   </p>
                   {p.is_stale && (
-                    <p className="mt-2 text-xs font-medium text-amber-600">
+                    <p className="mt-2 text-xs font-medium text-warning">
                       Today's orders may not be imported yet
                     </p>
                   )}
@@ -470,7 +470,7 @@ export default function ExternalOrdersPage() {
       )}
 
       {preview && (preview.unresolved_modifiers?.length ?? 0) > 0 && (
-        <Card className="border-amber-500/50">
+        <Card className="border-warning/50">
           <CardHeader>
             <CardTitle>Unknown extras</CardTitle>
             <CardDescription>
@@ -518,7 +518,7 @@ export default function ExternalOrdersPage() {
                 </CardDescription>
               </div>
               {preview.can_import ? (
-                <span className="flex items-center gap-1.5 text-sm font-medium text-emerald-600">
+                <span className="flex items-center gap-1.5 text-sm font-medium text-success">
                   <CheckCircle2 className="h-4 w-4" /> Ready to import
                 </span>
               ) : (
@@ -530,7 +530,7 @@ export default function ExternalOrdersPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {(preview.orders_in_closed_period ?? 0) > 0 && (
-              <div className="rounded-lg border border-amber-500/50 bg-amber-500/5 p-3">
+              <div className="rounded-lg border border-warning/50 bg-warning/5 p-3">
                 <p className="text-sm font-medium">
                   {preview.orders_in_closed_period} order(s) were placed before your last
                   approved stocktake
@@ -624,11 +624,11 @@ export default function ExternalOrdersPage() {
                         ) : o.blocks_import ? (
                           <span className="text-destructive">needs linking</span>
                         ) : o.is_cancelled ? (
-                          <span className="text-amber-600">cancelled</span>
+                          <span className="text-warning">cancelled</span>
                         ) : o.in_closed_period ? (
-                          <span className="text-amber-600">before last count</span>
+                          <span className="text-warning">before last count</span>
                         ) : (
-                          <span className="text-emerald-600">ready</span>
+                          <span className="text-success">ready</span>
                         )}
                       </td>
                     </tr>
