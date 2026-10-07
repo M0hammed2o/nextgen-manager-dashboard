@@ -1,6 +1,5 @@
 import { useAuth } from '@/lib/auth';
-import { useTheme } from '@/lib/theme';
-import { Sun, Moon, LogOut, ExternalLink } from 'lucide-react';
+import { LogOut, ExternalLink } from 'lucide-react';
 import { RestaurantMark } from '@/components/RestaurantIdentity';
 import { useBrand } from '@/lib/brand-provider';
 import { Button } from '@/components/ui/button';
@@ -8,7 +7,6 @@ import { Button } from '@/components/ui/button';
 export function TopBar() {
   const { user, logout } = useAuth();
   const { displayName, branchName } = useBrand();
-  const { theme, toggleTheme } = useTheme();
 
   return (
     <>
@@ -42,9 +40,22 @@ export function TopBar() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={toggleTheme} className="text-muted-foreground">
-            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </Button>
+          {/* DARK MODE IS DEFERRED -- the toggle is removed on purpose.
+              See KNOWN_BUGS.md BUG-0121 and DECISIONS.md DECISION-0050.
+
+              The theme engine derives a restaurant's brand tokens against a
+              WHITE surface (lib/brand.ts enforces WCAG 1.4.11 visibility
+              against the light card colour). In dark mode those same tokens
+              are still written to <html>, so a dark brand -- including the
+              unbranded NextGen charcoal default -- renders charcoal-on-
+              charcoal. This dashboard is the only app with BOTH a brand engine
+              and a theme toggle, which is exactly the broken combination.
+
+              Leaving a user able to select a visual mode we know is broken is
+              worse than not offering it, so the control is removed until the
+              derivation is theme-aware. ThemeProvider stays (light is the
+              default and `.dark` remains defined), so re-enabling this is one
+              button, not a rebuild. */}
           <Button variant="ghost" size="sm" className="hidden sm:flex text-muted-foreground gap-1.5" asChild>
             <a href="https://nextgenintelligence.co.za" target="_blank" rel="noopener noreferrer">
               <ExternalLink className="w-3.5 h-3.5" /> Website
