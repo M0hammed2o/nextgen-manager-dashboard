@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
 import { CreditCard, Download, ExternalLink, FileText, Loader2, Receipt, ShieldAlert } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -317,12 +317,7 @@ export default function BillingPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Billing</h1>
-        <p className="text-sm text-muted-foreground">
-          {isOwner ? 'Manage your NextGen Intelligence subscription' : 'Your NextGen Intelligence account status'}
-        </p>
-      </div>
+      <PageHeader title="Billing" description={<>{isOwner ? 'Manage your NextGen Intelligence subscription' : 'Your NextGen Intelligence account status'}</>} />
 
       <PlanAndInvoicesSection isOwner={isOwner} />
 

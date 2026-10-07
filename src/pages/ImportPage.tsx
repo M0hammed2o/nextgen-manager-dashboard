@@ -9,6 +9,7 @@ import {
   AlertTriangle, CheckCircle2, FileSpreadsheet, Loader2, Upload, X,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { PageHeader } from '@/components/shared/PageComponents';
 
 type Sheet = 'menu' | 'ingredients' | 'recipes';
 
@@ -201,12 +202,7 @@ export default function ImportPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Import from a spreadsheet</h1>
-        <p className="text-sm text-muted-foreground">
-          Upload your own menu, ingredient or recipe sheet. Nothing changes until you confirm.
-        </p>
-      </div>
+      <PageHeader title="Import from a spreadsheet" description="Upload your own menu, ingredient or recipe sheet. Nothing changes until you confirm." />
 
       <div className="flex flex-wrap gap-2">
         {(Object.keys(SHEETS) as Sheet[]).map((key) => (

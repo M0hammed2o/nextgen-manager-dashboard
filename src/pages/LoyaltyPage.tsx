@@ -21,7 +21,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
 import { Gift, Plus, Edit, Trash2, Loader2, Search, Award, Info, PlusCircle, MinusCircle, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -768,10 +768,7 @@ export default function LoyaltyPage() {
   if (isError && isLoyaltyNotEnabledError(error)) {
     return (
       <div className="space-y-6 max-w-3xl">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Loyalty</h1>
-          <p className="text-sm text-muted-foreground">Reward repeat customers with points on every order</p>
-        </div>
+        <PageHeader title="Loyalty" description="Reward repeat customers with points on every order" />
         <Card>
           <CardContent className="pt-6">
             <EmptyState
@@ -791,10 +788,7 @@ export default function LoyaltyPage() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Loyalty</h1>
-        <p className="text-sm text-muted-foreground">Reward repeat customers with points on every order</p>
-      </div>
+      <PageHeader title="Loyalty" description="Reward repeat customers with points on every order" />
 
       <ProgramSettingsCard program={program} />
 

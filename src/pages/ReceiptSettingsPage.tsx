@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { PageSkeleton } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton } from '@/components/shared/PageComponents';
 import { FileImage, Loader2, Printer, Receipt, Upload, X } from 'lucide-react';
 import { useRef, useState as useLocalState } from 'react';
 import { useToast } from '@/hooks/use-toast';
@@ -188,12 +188,7 @@ export default function ReceiptSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Receipts</h1>
-        <p className="text-sm text-muted-foreground">
-          What prints on the till slip, and how.
-        </p>
-      </div>
+      <PageHeader title="Receipts" description="What prints on the till slip, and how." />
 
       <Card>
         <CardHeader>

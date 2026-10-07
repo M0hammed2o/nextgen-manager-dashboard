@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { PageSkeleton, ErrorState } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton, ErrorState } from '@/components/shared/PageComponents';
 import { Loader2, Wallet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -86,10 +86,7 @@ export default function TillPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Till / Cash-up</h1>
-        <p className="text-sm text-muted-foreground">Close the current till session and reconcile cash</p>
-      </div>
+      <PageHeader title="Till / Cash-up" description="Close the current till session and reconcile cash" />
 
       <Card>
         <CardHeader>

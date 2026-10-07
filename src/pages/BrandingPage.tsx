@@ -25,7 +25,7 @@ import { Loader2, RotateCcw, Upload } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { PageSkeleton, ErrorState } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton, ErrorState } from '@/components/shared/PageComponents';
 import type { BusinessSettings, UploadUrlResponse } from '@/types/api';
 import {
   AA_LARGE,
@@ -192,12 +192,7 @@ export default function BrandingPage() {
   return (
     <div className="max-w-5xl space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Restaurant Identity</h1>
-          <p className="text-sm text-muted-foreground">
-            Your logo, name and colour — used across your till, dashboard and customer receipts.
-          </p>
-        </div>
+        <PageHeader title="Restaurant Identity" description="Your logo, name and colour — used across your till, dashboard and customer receipts." />
         <div className="flex gap-2">
           <Button
             variant="outline"

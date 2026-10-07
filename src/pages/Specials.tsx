@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
-import { PageSkeleton, EmptyState } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton, EmptyState } from '@/components/shared/PageComponents';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -52,10 +52,7 @@ export default function SpecialsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Specials</h1>
-          <p className="text-sm text-muted-foreground">{specials.length} specials</p>
-        </div>
+        <PageHeader title="Specials" description={<>{specials.length} specials</>} />
         <Button className="gap-1.5" onClick={() => { setEditing(null); setShowModal(true); }}>
           <Plus className="w-4 h-4" /> Add Special
         </Button>

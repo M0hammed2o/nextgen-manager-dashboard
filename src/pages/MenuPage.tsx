@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { PageSkeleton, EmptyState } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton, EmptyState } from '@/components/shared/PageComponents';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger
@@ -82,12 +82,7 @@ export default function MenuPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Menu</h1>
-        <p className="text-sm text-muted-foreground">
-          {items.length} items · {categories.length} categories · {addOns.length} add-ons
-        </p>
-      </div>
+      <PageHeader title="Menu" description={<>{items.length} items · {categories.length} categories · {addOns.length} add-ons</>} />
 
       <Tabs defaultValue="items">
         <TabsList>

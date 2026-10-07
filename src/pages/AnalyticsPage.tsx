@@ -6,7 +6,7 @@ import { mapAnalyticsSummary, formatCurrency, formatCents } from '@/lib/mappers'
 import type {
   AnalyticsSummaryRaw, TopItem, DailyAnalytics, AverageOrderValue, PaymentMethodsReport, ChannelsReport,
 } from '@/types/api';
-import { StatCard, PageSkeleton, EmptyState, ErrorState, InlineErrorBanner } from '@/components/shared/PageComponents';
+import { PageHeader, StatCard, PageSkeleton, EmptyState, ErrorState, InlineErrorBanner } from '@/components/shared/PageComponents';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   ShoppingCart, DollarSign, Users, Cpu, BarChart3, TrendingUp, Wallet, CreditCard, PieChart, Lock,
@@ -72,7 +72,7 @@ export default function AnalyticsPage() {
   if (isError || !rawSummary) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold text-foreground">Analytics</h1>
+        <PageHeader title="Analytics" />
         <ErrorState
           message={(error as Error | undefined)?.message ?? "Couldn't load your analytics summary."}
           onRetry={() => refetch()}
@@ -93,10 +93,7 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Analytics</h1>
-          <p className="text-sm text-muted-foreground">Business performance insights</p>
-        </div>
+        <PageHeader title="Analytics" description="Business performance insights" />
         <div className="flex items-center gap-2">
           {(['today', '7d', '30d'] as Period[]).map((p) => (
             <Button key={p} variant={period === p ? 'default' : 'outline'} size="sm" onClick={() => setPeriod(p)}>

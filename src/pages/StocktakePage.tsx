@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { PageSkeleton } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton } from '@/components/shared/PageComponents';
 import { Loader2, ClipboardCheck, Lock, AlertTriangle, CalendarClock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -169,7 +169,7 @@ export default function StocktakePage() {
     if (message.includes('INVENTORY_NOT_ENABLED') || message.includes('not enabled')) {
       return (
         <div className="space-y-4">
-          <h1 className="text-2xl font-bold">Stocktake</h1>
+          <PageHeader title="Stocktake" />
           <Card><CardContent className="py-8 text-center">
             <p className="font-medium">Stock tracking is not switched on</p>
           </CardContent></Card>
@@ -178,7 +178,7 @@ export default function StocktakePage() {
     }
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Stocktake</h1>
+        <PageHeader title="Stocktake" />
         <p className="text-sm text-destructive">Could not load: {message}</p>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
           {isFetching ? 'Retrying…' : 'Retry'}
@@ -195,12 +195,7 @@ export default function StocktakePage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Stocktake &amp; variance</h1>
-          <p className="text-sm text-muted-foreground">
-            Count what is physically there, and compare it with what sales say should be.
-          </p>
-        </div>
+        <PageHeader title={<>Stocktake &amp; variance</>} description="Count what is physically there, and compare it with what sales say should be." />
         {!current && (
           <Button onClick={() => openMutation.mutate()} disabled={openMutation.isPending}>
             {openMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { PageSkeleton, EmptyState } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton, EmptyState } from '@/components/shared/PageComponents';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -84,10 +84,7 @@ export default function StaffPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Staff</h1>
-          <p className="text-sm text-muted-foreground">{staff.length} team members</p>
-        </div>
+        <PageHeader title="Staff" description={<>{staff.length} team members</>} />
         <Button className="gap-1.5" onClick={() => { setEditing(null); setShowModal(true); }}>
           <Plus className="w-4 h-4" /> Add Staff
         </Button>

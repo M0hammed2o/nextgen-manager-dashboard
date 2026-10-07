@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { PageSkeleton } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton } from '@/components/shared/PageComponents';
 import {
   AlertTriangle, CheckCircle2, ChefHat, Copy, Loader2, Plus, Trash2, XCircle,
 } from 'lucide-react';
@@ -201,7 +201,7 @@ export default function RecipesPage() {
     if (message.includes('INVENTORY_NOT_ENABLED') || message.includes('not enabled')) {
       return (
         <div className="space-y-4">
-          <h1 className="text-2xl font-bold">Recipes</h1>
+          <PageHeader title="Recipes" />
           <Card><CardContent className="py-8 text-center">
             <p className="font-medium">Stock tracking is not switched on</p>
           </CardContent></Card>
@@ -210,7 +210,7 @@ export default function RecipesPage() {
     }
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Recipes</h1>
+        <PageHeader title="Recipes" />
         <p className="text-sm text-destructive">Could not load recipes: {message}</p>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
           {isFetching ? 'Retrying…' : 'Retry'}
@@ -224,12 +224,7 @@ export default function RecipesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Recipes</h1>
-        <p className="text-sm text-muted-foreground">
-          What each menu item consumes. This is what turns a sale into stock usage.
-        </p>
-      </div>
+      <PageHeader title="Recipes" description="What each menu item consumes. This is what turns a sale into stock usage." />
 
       {coverage && (
         <Card>

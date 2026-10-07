@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { mapAnalyticsSummary, formatCurrency } from '@/lib/mappers';
 import type { AnalyticsSummaryRaw, Order, PaginatedResponse } from '@/types/api';
-import { StatCard, PageSkeleton, EmptyState, ErrorState, InlineErrorBanner } from '@/components/shared/PageComponents';
+import { PageHeader, StatCard, PageSkeleton, EmptyState, ErrorState, InlineErrorBanner } from '@/components/shared/PageComponents';
 import {
   ShoppingCart, CheckCircle, XCircle, DollarSign,
   MessageSquare, Cpu, Users, ArrowRight, Plus, Clock
@@ -55,10 +55,7 @@ export default function DashboardPage() {
         />
       )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Business overview at a glance</p>
-        </div>
+        <PageHeader title="Dashboard" description="Business overview at a glance" />
         <div className="flex items-center gap-2">
           {(['today', '7d', '30d'] as Period[]).map((p) => (
             <Button

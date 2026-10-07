@@ -7,6 +7,7 @@ import { Download, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { API_BASE_URL } from '@/lib/api-client';
+import { PageHeader } from '@/components/shared/PageComponents';
 
 export default function ExportsPage() {
   const { toast } = useToast();
@@ -42,10 +43,7 @@ export default function ExportsPage() {
 
   return (
     <div className="space-y-6 max-w-lg">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Exports</h1>
-        <p className="text-sm text-muted-foreground">Download order data as CSV</p>
-      </div>
+      <PageHeader title="Exports" description="Download order data as CSV" />
 
       <div className="bg-card border border-border rounded-xl p-6 space-y-5">
         <div className="space-y-2">

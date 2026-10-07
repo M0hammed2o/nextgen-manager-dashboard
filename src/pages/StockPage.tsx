@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { PageSkeleton } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton } from '@/components/shared/PageComponents';
 import { Loader2, Truck, Plus, Trash2, AlertTriangle, X, Scale } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { unitOptionsFor, defaultUnitFor } from '@/lib/stocktake-units';
@@ -229,7 +229,7 @@ export default function StockPage() {
     if (message.toLowerCase().includes('not enabled') || message.includes('INVENTORY_NOT_ENABLED')) {
       return (
         <div className="space-y-4">
-          <h1 className="text-2xl font-bold">Stock</h1>
+          <PageHeader title="Stock" />
           <Card><CardContent className="py-8 text-center">
             <p className="font-medium">Stock tracking is not switched on</p>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -241,7 +241,7 @@ export default function StockPage() {
     }
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Stock</h1>
+        <PageHeader title="Stock" />
         <p className="text-sm text-destructive">Could not load stock: {message}</p>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
           {isFetching ? 'Retrying…' : 'Retry'}
@@ -255,12 +255,7 @@ export default function StockPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Stock</h1>
-          <p className="text-sm text-muted-foreground">
-            What you should have, based on what you have sold. {live?.period_label}.
-          </p>
-        </div>
+        <PageHeader title="Stock" description={<>What you should have, based on what you have sold. {live?.period_label}.</>} />
         <div className="flex flex-wrap gap-2">
           <Button variant={showReceiving ? 'outline' : 'default'} onClick={() => { setShowReceiving((v) => !v); setShowAdjust(false); }}>
             <Truck className="mr-2 h-4 w-4" />

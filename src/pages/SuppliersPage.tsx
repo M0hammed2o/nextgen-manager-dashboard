@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -93,7 +93,7 @@ export default function SuppliersPage() {
     if (apiError.code === 'INVENTORY_NOT_ENABLED' || apiError.message?.toLowerCase().includes('not enabled')) {
       return (
         <div className="space-y-4">
-          <h1 className="text-2xl font-bold">Suppliers</h1>
+          <PageHeader title="Suppliers" />
           <Card><CardContent className="py-8 text-center">
             <p className="font-medium">Stock tracking is not switched on</p>
           </CardContent></Card>
@@ -102,7 +102,7 @@ export default function SuppliersPage() {
     }
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Suppliers</h1>
+        <PageHeader title="Suppliers" />
         <ErrorState message={apiError.message} onRetry={() => refetch()} isRetrying={isFetching} />
       </div>
     );
@@ -113,10 +113,7 @@ export default function SuppliersPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Suppliers</h1>
-          <p className="text-sm text-muted-foreground">Who your deliveries come from.</p>
-        </div>
+        <PageHeader title="Suppliers" description="Who your deliveries come from." />
         <Button onClick={() => { setEditing(null); setShowForm(true); }}>
           <Plus className="mr-2 h-4 w-4" /> Add supplier
         </Button>

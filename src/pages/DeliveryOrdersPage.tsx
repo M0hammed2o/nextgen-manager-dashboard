@@ -10,7 +10,7 @@ import { DELIVERY_DENY_REASON_CODES } from '@/types/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
 import { DeliverySubNav } from '@/components/delivery/DeliverySubNav';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -278,9 +278,7 @@ export default function DeliveryOrdersPage() {
   if (!deliveryEnabledConfirmed) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Delivery Marketplace Orders</h1>
-        </div>
+        <PageHeader title="Delivery Marketplace Orders" />
         <EmptyState
           icon={<Truck className="w-10 h-10" />}
           title="Delivery marketplace isn't enabled for this business"
@@ -295,7 +293,7 @@ export default function DeliveryOrdersPage() {
   if (isError || !data) {
     return (
       <div className="space-y-6">
-        <div><h1 className="text-2xl font-bold text-foreground">Delivery Marketplace Orders</h1></div>
+        <PageHeader title="Delivery Marketplace Orders" />
         <ErrorState message="Couldn't load delivery orders." onRetry={() => refetch()} isRetrying={isFetching} />
       </div>
     );
@@ -306,10 +304,7 @@ export default function DeliveryOrdersPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Delivery Marketplace Orders</h1>
-          <p className="text-sm text-muted-foreground">Live Uber Eats / Mr D API orders — separate from the CSV importer.</p>
-        </div>
+        <PageHeader title="Delivery Marketplace Orders" description="Live Uber Eats / Mr D API orders — separate from the CSV importer." />
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
           <SelectContent>

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { PageSkeleton } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton } from '@/components/shared/PageComponents';
 import { CheckCircle2, Circle, AlertCircle, ArrowRight, Upload } from 'lucide-react';
 
 interface SetupStep {
@@ -54,12 +54,7 @@ export default function SetupPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Set up {data.business_name}</h1>
-        <p className="text-sm text-muted-foreground">
-          Everything you need to configure yourself, in one place.
-        </p>
-      </div>
+      <PageHeader title={<>Set up {data.business_name}</>} description="Everything you need to configure yourself, in one place." />
 
       <Card>
         <CardContent className="py-5">

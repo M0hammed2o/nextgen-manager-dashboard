@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { PageSkeleton } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton } from '@/components/shared/PageComponents';
 import { AlertTriangle, EyeOff, Loader2, Package, Pencil, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -204,7 +204,7 @@ export default function IngredientsPage() {
     if (message.includes('INVENTORY_NOT_ENABLED') || message.includes('not enabled')) {
       return (
         <div className="space-y-4">
-          <h1 className="text-2xl font-bold">Ingredients</h1>
+          <PageHeader title="Ingredients" />
           <Card>
             <CardContent className="py-8 text-center">
               <Package className="mx-auto h-10 w-10 text-muted-foreground" />
@@ -219,7 +219,7 @@ export default function IngredientsPage() {
     }
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Ingredients</h1>
+        <PageHeader title="Ingredients" />
         <p className="text-sm text-destructive">Could not load ingredients: {message}</p>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
           {isFetching ? 'Retrying…' : 'Retry'}
@@ -234,12 +234,7 @@ export default function IngredientsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Ingredients</h1>
-          <p className="text-sm text-muted-foreground">
-            What you physically stock. Recipes consume these.
-          </p>
-        </div>
+        <PageHeader title="Ingredients" description="What you physically stock. Recipes consume these." />
         <Button
           onClick={() => {
             if (showForm) {

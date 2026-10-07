@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PageSkeleton, EmptyState, ErrorState, InlineErrorBanner } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton, EmptyState, ErrorState, InlineErrorBanner } from '@/components/shared/PageComponents';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import OrderReversalPanel from '@/components/orders/OrderReversalPanel';
 import ResendReceiptButton from '@/components/orders/ResendReceiptButton';
@@ -208,19 +208,19 @@ export default function OrdersPage() {
         />
       )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+        <PageHeader
+          title={
+            <span className="flex items-center gap-2">
               Orders
               {newOrderCount > 0 && (
-                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-destructive text-destructive-foreground animate-pulse">
+                <span className="inline-flex items-center gap-1 rounded-full bg-destructive px-2 py-0.5 text-xs font-semibold text-destructive-foreground animate-pulse">
                   <Bell className="w-3 h-3" /> {newOrderCount} new
                 </span>
               )}
-            </h1>
-            <p className="text-sm text-muted-foreground">{orders.length} orders</p>
-          </div>
-        </div>
+            </span>
+          }
+          description={<>{orders.length} orders</>}
+        />
         <div className="flex items-center gap-2">
           {newOrderCount > 0 && (
             <Button variant="outline" size="sm" onClick={() => setNewOrderCount(0)}>

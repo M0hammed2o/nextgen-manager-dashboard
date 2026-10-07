@@ -8,7 +8,7 @@ import type { DeliveryConnectionResponse, DeliveryProvider } from '@/types/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
 import { DeliverySubNav } from '@/components/delivery/DeliverySubNav';
 import { AlertTriangle, ExternalLink, Loader2, RefreshCw, Truck, Unplug } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -150,10 +150,7 @@ export default function DeliveryPlatformsPage() {
   if (!deliveryEnabledConfirmed) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Delivery Platforms</h1>
-          <p className="text-sm text-muted-foreground">Uber Eats and Mr D integrations</p>
-        </div>
+        <PageHeader title="Delivery Platforms" description="Uber Eats and Mr D integrations" />
         <EmptyState
           icon={<Truck className="w-10 h-10" />}
           title="Delivery marketplace isn't enabled for this business"
@@ -168,9 +165,7 @@ export default function DeliveryPlatformsPage() {
   if (isError || !connections) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Delivery Platforms</h1>
-        </div>
+        <PageHeader title="Delivery Platforms" />
         <ErrorState message="Couldn't load your delivery connections." onRetry={() => refetch()} isRetrying={isFetching} />
       </div>
     );
@@ -183,13 +178,7 @@ export default function DeliveryPlatformsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Delivery Platforms</h1>
-        <p className="text-sm text-muted-foreground">
-          Uber Eats and Mr D integrations. A connection being "on" here is never the same as it being live —
-          check the status on each card.
-        </p>
-      </div>
+      <PageHeader title="Delivery Platforms" description={<>Uber Eats and Mr D integrations. A connection being "on" here is never the same as it being live — check the status on each card.</>} />
       <DeliverySubNav />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {PROVIDERS.map((provider) => {

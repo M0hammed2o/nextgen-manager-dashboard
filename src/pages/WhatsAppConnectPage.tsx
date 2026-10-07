@@ -19,7 +19,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
 import {
   MessageCircle, CheckCircle2, AlertTriangle, XCircle, Loader2,
   PauseCircle, PlayCircle, ChevronDown, Send, Unplug, Activity,
@@ -214,10 +214,7 @@ export default function WhatsAppConnectPage() {
   if (!whatsappEnabled) {
     return (
       <div className="space-y-6 max-w-2xl">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">WhatsApp Connect</h1>
-          <p className="text-sm text-muted-foreground">Connect your own WhatsApp Business number</p>
-        </div>
+        <PageHeader title="WhatsApp Connect" description="Connect your own WhatsApp Business number" />
         <EmptyState
           icon={<MessageCircle className="w-10 h-10" />}
           title="WhatsApp ordering isn't enabled for this business"
@@ -232,9 +229,7 @@ export default function WhatsAppConnectPage() {
   if (configError || connectionError || !config || !connection) {
     return (
       <div className="space-y-6 max-w-2xl">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">WhatsApp Connect</h1>
-        </div>
+        <PageHeader title="WhatsApp Connect" />
         <ErrorState
           message="Couldn't load your WhatsApp connection status."
           onRetry={() => { refetchConfig(); refetchConnection(); }}
@@ -272,10 +267,7 @@ export default function WhatsAppConnectPage() {
   return (
     <div className="space-y-6 max-w-2xl">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">WhatsApp Connect</h1>
-          <p className="text-sm text-muted-foreground">Connect your own WhatsApp Business number for ordering</p>
-        </div>
+        <PageHeader title="WhatsApp Connect" description="Connect your own WhatsApp Business number for ordering" />
         <StatusBadge variant={STATUS_BADGE_VARIANT[connection.status]} label={STATUS_LABEL[connection.status]} />
       </div>
 

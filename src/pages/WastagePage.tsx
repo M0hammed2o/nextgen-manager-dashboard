@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -127,7 +127,7 @@ export default function WastagePage() {
     if (apiError.code === 'INVENTORY_NOT_ENABLED' || apiError.message?.toLowerCase().includes('not enabled')) {
       return (
         <div className="space-y-4">
-          <h1 className="text-2xl font-bold">Wastage</h1>
+          <PageHeader title="Wastage" />
           <Card><CardContent className="py-8 text-center">
             <p className="font-medium">Stock tracking is not switched on</p>
           </CardContent></Card>
@@ -136,7 +136,7 @@ export default function WastagePage() {
     }
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Wastage</h1>
+        <PageHeader title="Wastage" />
         <ErrorState message={apiError.message} onRetry={() => refetch()} isRetrying={isFetching} />
       </div>
     );
@@ -144,13 +144,7 @@ export default function WastagePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Wastage</h1>
-        <p className="text-sm text-muted-foreground">
-          Losses staff have logged — dropped, burnt, spoiled, or given away. Review and sign off the
-          ones that need it.
-        </p>
-      </div>
+      <PageHeader title="Wastage" description="Losses staff have logged — dropped, burnt, spoiled, or given away. Review and sign off the ones that need it." />
 
       <div className="flex flex-wrap gap-2">
         {TABS.map((t) => (

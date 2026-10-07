@@ -6,7 +6,7 @@ import { formatCurrency } from '@/lib/mappers';
 import type { Stocktake, StocktakeSummary } from '@/types/inventory';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { PageSkeleton } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton } from '@/components/shared/PageComponents';
 import { AlertTriangle, ArrowRight, ClipboardCheck, Info } from 'lucide-react';
 
 /**
@@ -45,7 +45,7 @@ export default function VariancePage() {
     if (message.toLowerCase().includes('not enabled') || message.includes('INVENTORY_NOT_ENABLED')) {
       return (
         <div className="space-y-4">
-          <h1 className="text-2xl font-bold">Variance</h1>
+          <PageHeader title="Variance" />
           <Card><CardContent className="py-8 text-center">
             <p className="font-medium">Stock tracking is not switched on</p>
           </CardContent></Card>
@@ -54,7 +54,7 @@ export default function VariancePage() {
     }
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Variance</h1>
+        <PageHeader title="Variance" />
         <p className="text-sm text-destructive">Could not load: {message}</p>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
           {isFetching ? 'Retrying…' : 'Retry'}
@@ -66,12 +66,7 @@ export default function VariancePage() {
   if (approved.length === 0) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">Variance</h1>
-          <p className="text-sm text-muted-foreground">
-            Expected stock against what you actually counted.
-          </p>
-        </div>
+        <PageHeader title="Variance" description="Expected stock against what you actually counted." />
         <Card>
           <CardContent className="py-10 text-center">
             <ClipboardCheck className="mx-auto h-10 w-10 text-muted-foreground" />
@@ -96,12 +91,7 @@ export default function VariancePage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Variance</h1>
-          <p className="text-sm text-muted-foreground">
-            What your sales say you should have, against what you counted.
-          </p>
-        </div>
+        <PageHeader title="Variance" description="What your sales say you should have, against what you counted." />
         {approved.length > 1 && (
           <select
             value={currentId ?? ''}

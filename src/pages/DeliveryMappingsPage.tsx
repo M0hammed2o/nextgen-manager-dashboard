@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
 import { DeliverySubNav } from '@/components/delivery/DeliverySubNav';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -281,7 +281,7 @@ export default function DeliveryMappingsPage() {
   if (!deliveryEnabledConfirmed) {
     return (
       <div className="space-y-6">
-        <div><h1 className="text-2xl font-bold text-foreground">Menu Mapping</h1></div>
+        <PageHeader title="Menu Mapping" />
         <EmptyState
           icon={<Truck className="w-10 h-10" />}
           title="Delivery marketplace isn't enabled for this business"
@@ -296,7 +296,7 @@ export default function DeliveryMappingsPage() {
   if (isError || !mappings) {
     return (
       <div className="space-y-6">
-        <div><h1 className="text-2xl font-bold text-foreground">Menu Mapping</h1></div>
+        <PageHeader title="Menu Mapping" />
         <ErrorState message="Couldn't load menu mappings." onRetry={() => refetch()} isRetrying={isFetching} />
       </div>
     );
@@ -307,13 +307,7 @@ export default function DeliveryMappingsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Menu Mapping</h1>
-          <p className="text-sm text-muted-foreground">
-            Point each provider item/modifier at what it means on your NextGen menu. An order containing an unmapped
-            item cannot be processed and will be auto-declined at the provider's deadline.
-          </p>
-        </div>
+        <PageHeader title="Menu Mapping" description="Point each provider item/modifier at what it means on your NextGen menu. An order containing an unmapped item cannot be processed and will be auto-declined at the provider's deadline." />
         <Button className="gap-1.5" onClick={() => setDialogState({ open: true, initial: emptyForm() })}>
           <Plus className="w-4 h-4" /> Add mapping
         </Button>

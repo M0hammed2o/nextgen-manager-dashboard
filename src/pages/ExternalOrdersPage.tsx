@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { PageSkeleton } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton } from '@/components/shared/PageComponents';
 import {
   AlertTriangle, CheckCircle2, Clock, Loader2, Upload, X, Truck, Link2,
 } from 'lucide-react';
@@ -266,12 +266,7 @@ export default function ExternalOrdersPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Delivery orders</h1>
-        <p className="text-sm text-muted-foreground">
-          Import your daily Uber Eats and Mr D reports so those sales count towards your stock.
-        </p>
-      </div>
+      <PageHeader title="Delivery orders" description="Import your daily Uber Eats and Mr D reports so those sales count towards your stock." />
 
       {/* Freshness — the whole reason this screen leads with status */}
       {status?.stock_warning && (
