@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { PageHeader, PageSkeleton } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton, StockStatusPill } from '@/components/shared/PageComponents';
+import type { StockStatus } from '@/components/shared/PageComponents';
 import { Loader2, Truck, Plus, Trash2, AlertTriangle, X, Scale } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { unitOptionsFor, defaultUnitFor } from '@/lib/stocktake-units';
@@ -31,6 +32,9 @@ interface LiveStockRow {
   variance_value_cents: number | null;
   variance_percent: string | null;
   needs_attention: boolean;
+  /** Expected quantity as a number. Not derivable from expected_value_cents:
+      an ingredient with no cost set values at 0 while still having stock. */
+  expected_milli: number;
   expected_value_cents: number;
   below_par: boolean;
 }
@@ -250,6 +254,39 @@ export default function StockPage() {
     );
   }
 
+  /**
+   * Stock status from data that genuinely exists.
+   *
+   * CRITICAL is `expected_milli <= 0` -- a factual state (you have none), not
+   * an invented threshold.
+   * LOW is the backend's own `below_par` (expected < the ingredient's par
+   * level), so the dashboard and the API always agree on what "low" means.
+   * HEALTHY is neither.
+   *
+   * `needs_attention` is deliberately NOT folded in here. It means
+   * "below par OR the counted variance exceeded the alert threshold", and a
+   * variance alert is a COUNTING problem, not a stock-level one. Collapsing
+   * the two would tell a manager they are running out when in fact their
+   * count disagreed with their sales. It keeps its own separate indicator.
+   */
+  /**
+   * "5 kg x R100/kg = R500.00" -- a preview of the arithmetic the BACKEND will
+   * perform, never a replacement for it. Returns null unless both the quantity
+   * and the cost parse to finite, non-negative numbers, so a partially-typed
+   * line shows nothing rather than a wrong total.
+   */
+  const lineMath = (line: ReceiptLine): string | null => {
+    const qty = Number.parseFloat(line.quantity);
+    const cost = Number.parseFloat(line.cost);
+    if (!Number.isFinite(qty) || !Number.isFinite(cost) || qty <= 0 || cost < 0) return null;
+    const unitLabel = line.unit === 'PACK' ? 'pack' : line.unit.toLowerCase();
+    const total = qty * cost;
+    return `${qty} ${unitLabel} x ${formatCurrency(Math.round(cost * 100))}/${unitLabel} = ${formatCurrency(Math.round(total * 100))}`;
+  };
+
+  const stockStatus = (r: LiveStockRow): StockStatus =>
+    r.expected_milli <= 0 ? 'CRITICAL' : r.below_par ? 'LOW' : 'HEALTHY';
+
   const rows = (live?.rows ?? []).filter((r) => !attentionOnly || r.needs_attention);
 
   return (
@@ -429,6 +466,23 @@ export default function StockPage() {
                     onClick={() => setLines(lines.filter((_, i) => i !== index))}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
+                  {/* E7: a DISPLAY-ONLY restatement of what was typed, so a
+                      manager can see "5 kg x R100/kg = R500.00" before
+                      submitting instead of discovering it afterwards.
+
+                      It is deliberately NOT authoritative and NOT sent: the
+                      backend computes the stored line cost (routes_inventory
+                      .py, BUG-0111's fix) and remains the only source of
+                      truth. It is shown only when BOTH numbers parse, so a
+                      half-typed line never flashes a misleading figure, and it
+                      restates the UNIT COST the user entered rather than
+                      implying anything about the ingredient's standing cost,
+                      which a goods receipt never changes. */}
+                  {lineMath(line) && (
+                    <p className="col-span-full -mt-1 text-xs tabular-nums text-muted-foreground">
+                      {lineMath(line)}
+                    </p>
+                  )}
                 </div>
               );
             })}
@@ -597,10 +651,12 @@ export default function StockPage() {
                     <td className="px-3 py-2 tabular-nums text-muted-foreground">{row.wastage_display}</td>
                     <td className="px-3 py-2 tabular-nums text-muted-foreground">{row.adjustments_display}</td>
                     <td className="px-3 py-2 font-semibold tabular-nums">
-                      {row.expected_display}
-                      {row.below_par && (
-                        <span className="ml-2 text-xs font-normal text-warning">low</span>
-                      )}
+                      <span className="flex flex-wrap items-center gap-2">
+                        {row.expected_display}
+                        {stockStatus(row) !== 'HEALTHY' && (
+                          <StockStatusPill status={stockStatus(row)} />
+                        )}
+                      </span>
                     </td>
                     <td className="px-3 py-2 tabular-nums text-muted-foreground">
                       {row.last_counted_display ?? '—'}
