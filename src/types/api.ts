@@ -177,6 +177,24 @@ export type PaymentStatus =
   | 'VOIDED'
   | 'CASH_ON_COLLECTION';
 
+export type PosAllocationPaymentMethod = 'CASH' | 'CARD' | 'OTHER' | 'PAY_BY_LINK';
+
+// Split-payment breakdown (migration 0055, backend). Only present on POS
+// orders settled by >= 2 payment methods (payment_method === 'SPLIT');
+// absent/undefined on every other order, including ones that predate the
+// migration. amount_cents is the portion of the order this allocation
+// settles -- never the amount physically tendered, which for CASH only is
+// cash_tendered_cents.
+export interface PaymentAllocation {
+  payment_method: PosAllocationPaymentMethod;
+  amount_cents: number;
+  cash_tendered_cents?: number | null;
+  change_due_cents?: number | null;
+  payment_reference?: string | null;
+  provider?: string | null;
+  paid_at?: string | null;
+}
+
 export interface Order {
   id: string;
   order_number: string;
@@ -185,6 +203,7 @@ export interface Order {
   payment_method: string | null;
   payment_reference: string | null;
   payment_link_url: string | null;
+  payment_allocations?: PaymentAllocation[] | null;
   payment_required: boolean;
   paid_at: string | null;
   order_mode: string;

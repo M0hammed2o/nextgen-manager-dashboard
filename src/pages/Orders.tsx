@@ -396,6 +396,30 @@ export default function OrdersPage() {
                   </span>
                 </div>
               </div>
+              {selectedOrder.payment_method === 'SPLIT' && (selectedOrder.payment_allocations?.length ?? 0) > 0 && (
+                <div className="p-3 rounded-lg bg-muted/50 text-sm space-y-1.5">
+                  <h4 className="font-medium text-foreground mb-1">Payment Breakdown</h4>
+                  {selectedOrder.payment_allocations!.map((a, i) => (
+                    <div key={i} className="space-y-0.5">
+                      <div className="flex justify-between">
+                        <span className="text-foreground">
+                          {a.payment_method === 'PAY_BY_LINK'
+                            ? `Pay by Link${a.provider ? ` (${a.provider})` : ''}`
+                            : a.payment_method === 'CASH' ? 'Cash'
+                            : a.payment_method === 'CARD' ? 'Card' : 'Other'}
+                        </span>
+                        <span className="text-foreground font-medium">{formatCents(a.amount_cents)}</span>
+                      </div>
+                      {a.payment_method === 'CASH' && a.cash_tendered_cents != null && (
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Cash received / change</span>
+                          <span>{formatCents(a.cash_tendered_cents)} / {formatCents(a.change_due_cents ?? 0)}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
               {selectedOrder.delivery_address && (
                 <div className="p-3 rounded-lg bg-muted/50 text-sm">
                   <span className="text-xs text-muted-foreground">Delivery Address:</span>{' '}
