@@ -1,30 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { apiClient } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PageHeader, PageSkeleton } from '@/components/shared/PageComponents';
 import { CheckCircle2, Circle, AlertCircle, ArrowRight, Upload } from 'lucide-react';
-
-interface SetupStep {
-  key: string;
-  label: string;
-  description: string;
-  status: 'done' | 'partial' | 'todo';
-  detail: string;
-  count: number;
-  total: number;
-  required_to_trade: boolean;
-  href: string | null;
-}
-
-interface SetupProgress {
-  business_name: string;
-  inventory_enabled: boolean;
-  ready_to_trade: boolean;
-  percent_complete: number;
-  steps: SetupStep[];
-}
+import { useSetupProgress } from '@/hooks/use-setup-progress';
 
 /**
  * Setup — what still needs configuring before this restaurant can trade.
@@ -32,12 +11,14 @@ interface SetupProgress {
  * Exists so an owner never has to ask NextGen "am I ready?". Every status
  * here is computed from records that actually exist, not a checklist someone
  * ticks off, so it cannot say "done" for something that was never set up.
+ *
+ * Reachable two ways (UI V2.1, A5): a prominent top-level sidebar shortcut
+ * while `ready_to_trade` is false, and permanently under Settings -> Setup
+ * once it's true — see nav-items.ts's `requiresSetupIncomplete` gate. Both
+ * share this page and the same cached query (hooks/use-setup-progress.ts).
  */
 export default function SetupPage() {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['setup-progress'],
-    queryFn: () => apiClient.get<SetupProgress>('/v1/business/setup/progress'),
-  });
+  const { data, isLoading, error } = useSetupProgress();
 
   if (isLoading) return <PageSkeleton />;
   if (error) {

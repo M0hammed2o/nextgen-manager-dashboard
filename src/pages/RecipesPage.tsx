@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PageHeader, PageSkeleton } from '@/components/shared/PageComponents';
+import { InventorySubNav } from '@/components/inventory/InventorySubNav';
 import {
   AlertTriangle, CheckCircle2, ChefHat, Copy, Loader2, Plus, Trash2, XCircle,
 } from 'lucide-react';
@@ -224,6 +225,7 @@ export default function RecipesPage() {
 
   return (
     <div className="space-y-6">
+      <InventorySubNav />
       <PageHeader title="Recipes" description="What each menu item consumes. This is what turns a sale into stock usage." />
 
       {coverage && (

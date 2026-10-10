@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PageHeader, PageSkeleton, StockStatusPill } from '@/components/shared/PageComponents';
 import type { StockStatus } from '@/components/shared/PageComponents';
+import { InventorySubNav } from '@/components/inventory/InventorySubNav';
 import { Loader2, Truck, Plus, Trash2, AlertTriangle, X, Scale } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { unitOptionsFor, defaultUnitFor } from '@/lib/stocktake-units';
@@ -292,6 +293,7 @@ export default function StockPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
+        <InventorySubNav />
         <PageHeader title="Stock" description={<>What you should have, based on what you have sold. {live?.period_label}.</>} />
         <div className="flex flex-wrap gap-2">
           <Button variant={showReceiving ? 'outline' : 'default'} onClick={() => { setShowReceiving((v) => !v); setShowAdjust(false); }}>

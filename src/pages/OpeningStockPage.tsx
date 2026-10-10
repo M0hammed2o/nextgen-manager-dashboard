@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PageHeader, PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
+import { InventorySubNav } from '@/components/inventory/InventorySubNav';
 import { cn } from '@/lib/utils';
 import { Boxes, Loader2, CheckCircle2, AlertTriangle, FileUp, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -214,6 +215,7 @@ export default function OpeningStockPage() {
 
   return (
     <div className="space-y-6">
+      <InventorySubNav />
       <PageHeader title="Opening Stock" description="Set each ingredient's starting position — a physical count on go-live day, or whatever you carried over from a previous system. Posts once per ingredient, through the same audited ledger as every other stock movement." />
 
       {allIngredients.length === 0 ? (

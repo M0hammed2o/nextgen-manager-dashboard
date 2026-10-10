@@ -5,7 +5,7 @@ import type { AnalyticsSummaryRaw, Order, PaginatedResponse } from '@/types/api'
 import { PageHeader, StatCard, PageSkeleton, EmptyState, ErrorState, InlineErrorBanner } from '@/components/shared/PageComponents';
 import {
   ShoppingCart, CheckCircle, XCircle, DollarSign,
-  MessageSquare, Cpu, Users, ArrowRight, Plus, Clock
+  MessageSquare, Users, ArrowRight, Plus, Clock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
@@ -70,17 +70,16 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4 sm:gap-4">
+      {/* UI V2.1 (A1): LLM Calls/LLM Cost removed — internal infra metrics
+          with no owner-facing action, never meant to be customer-visible.
+          The remaining 6 metrics fit one grid: 2-col on mobile, 3-col on
+          desktop/tablet. */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 sm:gap-4">
         <StatCard label="Total Orders" value={summary.totalOrders} icon={<ShoppingCart className="w-5 h-5" />} />
         <StatCard label="Revenue" value={formatCurrency(summary.revenue)} icon={<DollarSign className="w-5 h-5" />} />
         <StatCard label="Completed" value={summary.completedOrders} icon={<CheckCircle className="w-5 h-5" />} />
         <StatCard label="Cancelled" value={summary.cancelledOrders} icon={<XCircle className="w-5 h-5" />} />
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4 sm:gap-4">
         <StatCard label="Messages" value={summary.totalMessages} icon={<MessageSquare className="w-5 h-5" />} />
-        <StatCard label="LLM Calls" value={summary.llmCalls} icon={<Cpu className="w-5 h-5" />} />
-        <StatCard label="LLM Cost" value={formatCurrency(summary.llmCost)} icon={<DollarSign className="w-5 h-5" />} />
         <StatCard label="Unique Customers" value={summary.uniqueCustomers} icon={<Users className="w-5 h-5" />} />
       </div>
 

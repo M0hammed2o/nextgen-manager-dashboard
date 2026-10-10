@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PageHeader, PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
+import { InventorySubNav } from '@/components/inventory/InventorySubNav';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -144,6 +145,7 @@ export default function WastagePage() {
 
   return (
     <div className="space-y-6">
+      <InventorySubNav />
       <PageHeader title="Wastage" description="Losses staff have logged — dropped, burnt, spoiled, or given away. Review and sign off the ones that need it." />
 
       <div className="flex flex-wrap gap-2">

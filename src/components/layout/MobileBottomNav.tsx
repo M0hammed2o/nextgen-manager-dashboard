@@ -3,7 +3,8 @@
  *
  * WHY THIS EXISTS
  * ===============
- * The dashboard has 25 navigation entries. On a desktop sidebar that is fine:
+ * The dashboard has far more navigation entries (see nav-items.ts) than fit
+ * on one bar. On a desktop sidebar that is fine:
  * they are all visible at once and scanning is cheap. On a phone the same list
  * was reachable only by opening a drawer, which means every single navigation
  * act cost two taps and the owner had to remember what was in there.

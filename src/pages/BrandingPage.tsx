@@ -20,7 +20,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, RotateCcw, Upload } from 'lucide-react';
+import { Check, Loader2, RotateCcw, Upload } from 'lucide-react';
 
 import { apiClient } from '@/lib/api-client';
 import { useToast } from '@/hooks/use-toast';
@@ -39,6 +39,19 @@ import {
 
 const LOGO_MAX_MB = 2;
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * UI V2.1 (A7): swatch-first colour picking — a curated starting set an
+ * owner can tap instead of typing or hunting in the native picker. Purely a
+ * convenience shortcut: clicking one just sets the same hex string typing it
+ * would, so it goes through the exact same state, validation (`HEX_RE`),
+ * `deriveBrand()` and save payload as any other value. Not a second colour
+ * engine — there is still only one way a colour reaches the backend.
+ */
+const PRESET_SWATCHES = [
+  '#C62828', '#E65100', '#F9A825', '#2E7D32',
+  '#00838F', '#1565C0', '#5E35B1', '#AD1457',
+] as const;
 
 interface Draft {
   brand_display_name: string;
@@ -301,34 +314,69 @@ export default function BrandingPage() {
             </div>
           </section>
 
-          <section className="space-y-4 rounded-xl border border-border bg-card p-6">
+          <section className="space-y-5 rounded-xl border border-border bg-card p-6">
             <h3 className="font-semibold text-foreground">Colour</h3>
             {([
               ['brand_primary_colour', 'Primary colour', primaryValid, 'Used for buttons, active navigation and highlights.'],
               ['brand_accent_colour', 'Accent (optional)', accentValid, 'Used for a second chart series. Derived from your primary when empty.'],
-            ] as const).map(([field, label, valid, hint]) => (
-              <div key={field} className="space-y-1.5">
-                <label htmlFor={field} className="text-sm font-medium text-foreground">{label}</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    aria-label={`${label} picker`}
-                    value={HEX_RE.test(draft[field]) ? draft[field] : NEXTGEN_DEFAULT_BRAND}
-                    onChange={(e) => setDraft({ ...draft, [field]: e.target.value.toUpperCase() })}
-                    className="h-11 w-14 cursor-pointer rounded-lg border border-input bg-background p-1"
-                  />
-                  <input
-                    id={field}
-                    value={draft[field]}
-                    onChange={(e) => setDraft({ ...draft, [field]: e.target.value })}
-                    placeholder="#000000"
-                    className="h-11 flex-1 rounded-lg border border-input bg-background px-3 font-mono text-sm uppercase text-foreground"
-                  />
+            ] as const).map(([field, label, valid, hint]) => {
+              const current = draft[field].trim().toUpperCase();
+              return (
+                <div key={field} className="space-y-2">
+                  <p className="text-sm font-medium text-foreground">{label}</p>
+
+                  {/* Swatch-first: tap a swatch, or the large preview, to pick
+                      a colour visually. Typing a hex stays available but is
+                      now the secondary path below. */}
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      aria-label={`${label} picker`}
+                      value={HEX_RE.test(draft[field]) ? draft[field] : NEXTGEN_DEFAULT_BRAND}
+                      onChange={(e) => setDraft({ ...draft, [field]: e.target.value.toUpperCase() })}
+                      className="h-14 w-14 shrink-0 cursor-pointer rounded-xl border border-input bg-background p-1 shadow-sm"
+                    />
+                    <div className="flex flex-1 flex-wrap items-center gap-1.5">
+                      {PRESET_SWATCHES.map((hex) => {
+                        const selected = current === hex;
+                        return (
+                          <button
+                            key={hex}
+                            type="button"
+                            aria-label={`Use ${hex} for ${label.toLowerCase()}`}
+                            aria-pressed={selected}
+                            onClick={() => setDraft({ ...draft, [field]: hex })}
+                            className={
+                              'grid h-8 w-8 place-items-center rounded-full border-2 transition-transform ' +
+                              (selected ? 'scale-110 border-foreground' : 'border-transparent hover:scale-105')
+                            }
+                            style={{ background: hex }}
+                          >
+                            {selected && <Check className="h-4 w-4 text-white drop-shadow" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pl-0.5">
+                    <label htmlFor={field} className="text-xs text-muted-foreground">
+                      or enter a hex code
+                    </label>
+                    <input
+                      id={field}
+                      value={draft[field]}
+                      onChange={(e) => setDraft({ ...draft, [field]: e.target.value })}
+                      placeholder="#000000"
+                      className="h-8 w-28 rounded-md border border-input bg-background px-2 font-mono text-xs uppercase text-foreground"
+                    />
+                  </div>
+
+                  {!valid && <p className="text-xs text-destructive">Use a 6-digit hex colour, like #C62828.</p>}
+                  <p className="text-xs text-muted-foreground">{hint}</p>
                 </div>
-                {!valid && <p className="text-xs text-destructive">Use a 6-digit hex colour, like #C62828.</p>}
-                <p className="text-xs text-muted-foreground">{hint}</p>
-              </div>
-            ))}
+              );
+            })}
 
             {contrastNotes.map((n, i) => (
               <p

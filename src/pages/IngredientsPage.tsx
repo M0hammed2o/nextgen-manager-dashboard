@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PageHeader, PageSkeleton } from '@/components/shared/PageComponents';
+import { InventorySubNav } from '@/components/inventory/InventorySubNav';
 import { AlertTriangle, EyeOff, Loader2, Package, Pencil, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -234,6 +235,7 @@ export default function IngredientsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <InventorySubNav />
         <PageHeader title="Ingredients" description="What you physically stock. Recipes consume these." />
         <Button
           onClick={() => {

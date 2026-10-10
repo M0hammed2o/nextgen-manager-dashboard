@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { PageHeader, PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
+import { InventorySubNav } from '@/components/inventory/InventorySubNav';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -113,6 +114,7 @@ export default function SuppliersPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <InventorySubNav />
         <PageHeader title="Suppliers" description="Who your deliveries come from." />
         <Button onClick={() => { setEditing(null); setShowForm(true); }}>
           <Plus className="mr-2 h-4 w-4" /> Add supplier
