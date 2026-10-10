@@ -3,25 +3,24 @@ import { cn } from '@/lib/utils';
 import { useBusinessSettings } from '@/hooks/use-business-settings';
 
 /**
- * Cross-nav between every delivery-related page (UI V2.1, A4) -- the three
- * tightly-coupled live-marketplace pages (connections, live orders, menu
- * mapping) PLUS the CSV import/reconciliation page, which is now reached
- * via the same single "Delivery Orders" sidebar entry instead of its own
- * separate one. Does not replace the sidebar entry itself.
+ * Cross-nav between every delivery-related page -- the three tightly-coupled
+ * live-marketplace pages (connections, live orders, menu mapping) PLUS the
+ * CSV import/reconciliation page, reached via the same single "Delivery
+ * Orders" sidebar entry instead of separate ones. Does not replace the
+ * sidebar entry itself.
  *
- * IMPORTANT, and a deliberate deviation from the literal brief (recorded in
- * the final report): the brief asked for the whole merged nav item to be
- * gated on `delivery_platforms_enabled`. The CSV import page
- * (ExternalOrdersPage, "Import") is NOT gated on that entitlement today --
- * see docs/DELIVERY_PLATFORM_ARCHITECTURE.md §0's own note ("ExternalOrdersPage.tsx
- * (CSV importer) untouched") and the commercial feature matrix, which lists
- * CSV reconciliation as already-live baseline functionality, separate from
- * the new direct-API entitlement. Gating the whole item would have silently
- * removed existing access for every tenant without that entitlement, which
- * is exactly the "don't silently invent/remove product access" gap Part D
- * exists to catch. So: "Delivery Orders" stays a single, always-visible
- * sidebar entry (nav-items.ts), and ONLY the three live-marketplace tabs
- * here are gated on the entitlement -- "Import" is always shown.
+ * UI V2.1 follow-up (Part C4): two INDEPENDENT commercial entitlements now
+ * gate the tabs here, never conflated:
+ *   - Import (CSV/manual reconciliation) requires `delivery_reconciliation_enabled`
+ *   - Connections/Orders/Menu Mapping (live marketplace) require
+ *     `delivery_platforms_enabled`
+ * A tenant can have either, both, or neither -- the sidebar entry itself
+ * (nav-items.ts's `requiresDeliveryAccess`) is shown while EITHER is true,
+ * hidden only when both are false. Each individual page
+ * (ExternalOrdersPage/DeliveryOrdersPage/DeliveryMappingsPage/
+ * DeliveryPlatformsPage) independently shows its own honest "not enabled"
+ * state if reached directly while its specific entitlement is off, so
+ * direct navigation to a disabled tab never renders blank.
  */
 const MARKETPLACE_LINKS = [
   { to: '/settings/delivery', label: 'Connections' },
@@ -32,9 +31,10 @@ const IMPORT_LINK = { to: '/delivery-orders', label: 'Import' };
 
 export function DeliverySubNav() {
   const { data: settings } = useBusinessSettings();
-  const links = settings?.delivery_platforms_enabled
-    ? [IMPORT_LINK, ...MARKETPLACE_LINKS]
-    : [IMPORT_LINK];
+  const links = [
+    ...(settings?.delivery_reconciliation_enabled ? [IMPORT_LINK] : []),
+    ...(settings?.delivery_platforms_enabled ? MARKETPLACE_LINKS : []),
+  ];
 
   return (
     <div className="flex gap-1 overflow-x-auto border-b border-border pb-0">

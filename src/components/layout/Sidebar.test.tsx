@@ -15,11 +15,19 @@ function mockApi({
   inventoryEnabled = false,
   whatsappEnabled = false,
   loyaltyEnabled = false,
+  // Default true so every pre-existing test unrelated to the delivery
+  // entitlement split (UI V2.1 follow-up Part C4) keeps seeing the
+  // "Delivery Orders" item without having to know about it -- the OR
+  // combination itself is covered by its own dedicated tests below.
+  deliveryPlatformsEnabled = true,
+  deliveryReconciliationEnabled = false,
 }: {
   readyToTrade?: boolean;
   inventoryEnabled?: boolean;
   whatsappEnabled?: boolean;
   loyaltyEnabled?: boolean;
+  deliveryPlatformsEnabled?: boolean;
+  deliveryReconciliationEnabled?: boolean;
 } = {}) {
   vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
     if (url === '/v1/business/settings') {
@@ -27,6 +35,8 @@ function mockApi({
         inventory_enabled: inventoryEnabled,
         is_whatsapp_enabled: whatsappEnabled,
         loyalty_enabled: loyaltyEnabled,
+        delivery_platforms_enabled: deliveryPlatformsEnabled,
+        delivery_reconciliation_enabled: deliveryReconciliationEnabled,
       } as never;
     }
     if (url === '/v1/business/setup/progress') {
@@ -124,10 +134,39 @@ describe('Sidebar — UI V2.1 expandable Settings group (A6)', () => {
   });
 
   it('shows a single "Delivery Orders" entry, never a separate "Delivery Platforms" entry', async () => {
-    mockApi();
+    mockApi({ deliveryPlatformsEnabled: true });
     renderSidebar('/');
 
     await waitFor(() => expect(screen.getByText('Delivery Orders')).toBeInTheDocument());
     expect(screen.queryByText('Delivery Platforms')).not.toBeInTheDocument();
+  });
+
+  it('hides Delivery Orders entirely when both delivery entitlements are off', async () => {
+    mockApi({ deliveryPlatformsEnabled: false, deliveryReconciliationEnabled: false });
+    renderSidebar('/');
+
+    await waitFor(() => expect(screen.getByText('Dashboard')).toBeInTheDocument());
+    expect(screen.queryByText('Delivery Orders')).not.toBeInTheDocument();
+  });
+
+  it('shows Delivery Orders when only reconciliation is on', async () => {
+    mockApi({ deliveryPlatformsEnabled: false, deliveryReconciliationEnabled: true });
+    renderSidebar('/');
+
+    await waitFor(() => expect(screen.getByText('Delivery Orders')).toBeInTheDocument());
+  });
+
+  it('shows Delivery Orders when only platforms is on', async () => {
+    mockApi({ deliveryPlatformsEnabled: true, deliveryReconciliationEnabled: false });
+    renderSidebar('/');
+
+    await waitFor(() => expect(screen.getByText('Delivery Orders')).toBeInTheDocument());
+  });
+
+  it('shows Delivery Orders when both are on', async () => {
+    mockApi({ deliveryPlatformsEnabled: true, deliveryReconciliationEnabled: true });
+    renderSidebar('/');
+
+    await waitFor(() => expect(screen.getByText('Delivery Orders')).toBeInTheDocument());
   });
 });

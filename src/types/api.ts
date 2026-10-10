@@ -464,6 +464,13 @@ export interface BusinessSettings {
   delivery_platforms_enabled: boolean;
   uber_eats_enabled: boolean;
   mrd_enabled: boolean;
+  // Delivery reconciliation entitlement (migration 0054, UI V2.1 follow-up)
+  // — DELIBERATELY SEPARATE from delivery_platforms_enabled above: gates
+  // the CSV/manual delivery-order reconciliation importer
+  // (ExternalOrdersPage/routes_external_orders.py), not the live
+  // marketplace integrations. A business can have either, both, or
+  // neither. Platform-admin-set, business-plane READ-ONLY, same pattern.
+  delivery_reconciliation_enabled: boolean;
   // Advanced Analytics entitlement (migration 0047) — platform-admin-set,
   // business-plane READ-ONLY, same pattern as inventory_enabled/
   // delivery_platforms_enabled above. Gates GET /business/analytics/

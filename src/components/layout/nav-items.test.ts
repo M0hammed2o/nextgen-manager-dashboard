@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isNavItemVisible, navItems, visibleChildren, type NavItem } from './nav-items';
+import { isNavItemVisible, navItems, visibleChildren, hasDeliveryAccess, type NavItem } from './nav-items';
 
 const plainItem: NavItem = { to: '/orders', icon: navItems[0].icon, label: 'Orders' };
 const whatsappItem: NavItem = { to: '/whatsapp-thing', icon: navItems[0].icon, label: 'WhatsApp thing', requiresWhatsapp: true };
@@ -76,11 +76,13 @@ describe('UI V2.1 consolidation (A2-A6)', () => {
     expect(new Set(tos).size).toBe(tos.length);
   });
 
-  it('Delivery Orders is ONE always-visible top-level item — not gated on delivery_platforms_enabled, and the old separate "Delivery Platforms" entry no longer exists at the top level', () => {
+  it('Delivery Orders is ONE top-level item (not two), and the old separate "Delivery Platforms" entry no longer exists at the top level', () => {
+    // UI V2.1 follow-up (Part C4) superseded this item's original A4
+    // "always visible" design -- it is now gated on requiresDeliveryAccess
+    // (see the dedicated "Delivery Orders visibility" describe block below
+    // for the full OR-combined entitlement behaviour).
     const deliveryOrders = navItems.find((item) => item.label === 'Delivery Orders');
     expect(deliveryOrders?.to).toBe('/delivery-orders');
-    expect(isNavItemVisible(deliveryOrders!, undefined)).toBe(true);
-    expect(isNavItemVisible(deliveryOrders!, {})).toBe(true);
 
     expect(navItems.find((item) => item.label === 'Delivery Platforms')).toBeUndefined();
     expect(navItems.find((item) => item.to === '/settings/delivery')).toBeUndefined();
@@ -163,5 +165,47 @@ describe('UI V2.1 consolidation (A2-A6)', () => {
       'Dashboard', 'Setup', 'Orders', 'Menu', 'Specials', 'Loyalty', 'Staff', 'Till',
       'Delivery Orders', 'Inventory', 'Stocktake', 'Analytics', 'Settings',
     ]);
+  });
+});
+
+describe('Delivery Orders visibility — two independent entitlements, OR-combined (follow-up Part C4)', () => {
+  const deliveryOrders = navItems.find((item) => item.label === 'Delivery Orders')!;
+
+  it('requiresDeliveryAccess is set on the Delivery Orders item', () => {
+    expect(deliveryOrders.requiresDeliveryAccess).toBe(true);
+  });
+
+  it('hasDeliveryAccess is false when both entitlements are off or unknown', () => {
+    expect(hasDeliveryAccess(undefined)).toBe(false);
+    expect(hasDeliveryAccess({ delivery_platforms_enabled: false, delivery_reconciliation_enabled: false })).toBe(false);
+  });
+
+  it('hasDeliveryAccess is true when reconciliation only is on', () => {
+    expect(hasDeliveryAccess({ delivery_platforms_enabled: false, delivery_reconciliation_enabled: true })).toBe(true);
+  });
+
+  it('hasDeliveryAccess is true when platforms only is on', () => {
+    expect(hasDeliveryAccess({ delivery_platforms_enabled: true, delivery_reconciliation_enabled: false })).toBe(true);
+  });
+
+  it('hasDeliveryAccess is true when both are on', () => {
+    expect(hasDeliveryAccess({ delivery_platforms_enabled: true, delivery_reconciliation_enabled: true })).toBe(true);
+  });
+
+  it('both off or unknown: Delivery Orders is hidden', () => {
+    expect(isNavItemVisible(deliveryOrders, undefined)).toBe(false);
+    expect(isNavItemVisible(deliveryOrders, { has_delivery_access: false })).toBe(false);
+  });
+
+  it('reconciliation=true, platforms=false: Delivery Orders is visible', () => {
+    expect(isNavItemVisible(deliveryOrders, { has_delivery_access: hasDeliveryAccess({ delivery_reconciliation_enabled: true, delivery_platforms_enabled: false }) })).toBe(true);
+  });
+
+  it('reconciliation=false, platforms=true: Delivery Orders is visible', () => {
+    expect(isNavItemVisible(deliveryOrders, { has_delivery_access: hasDeliveryAccess({ delivery_reconciliation_enabled: false, delivery_platforms_enabled: true }) })).toBe(true);
+  });
+
+  it('both=true: Delivery Orders is visible', () => {
+    expect(isNavItemVisible(deliveryOrders, { has_delivery_access: hasDeliveryAccess({ delivery_reconciliation_enabled: true, delivery_platforms_enabled: true }) })).toBe(true);
   });
 });

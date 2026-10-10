@@ -32,6 +32,18 @@ export interface NavItem {
    */
   requiresSetupIncomplete?: boolean;
   /**
+   * UI V2.1 follow-up (Part C4): shown while EITHER
+   * `delivery_reconciliation_enabled` OR `delivery_platforms_enabled` is
+   * true — the two are independent commercial entitlements (CSV/manual
+   * reconciliation vs. the live marketplace integrations), so a tenant with
+   * only one of them still needs this entry. Hidden only when BOTH are
+   * false (or unknown). Matched against the single precomputed
+   * `ctx.has_delivery_access` rather than two separate `requires*` flags,
+   * since every other gate in this file is AND-combined and this is
+   * deliberately OR — see `isNavItemVisible`.
+   */
+  requiresDeliveryAccess?: boolean;
+  /**
    * UI V2.1, A6: an expandable group (currently only "Settings") instead of
    * a standalone route. Each child is rendered as its own link when the
    * group is expanded; the parent itself is not a route.
@@ -56,14 +68,18 @@ export interface NavItem {
  *   those pages. Stocktake stays its own top-level item per the brief, since
  *   it's a daily staff workflow, not a setup/admin page. All 8 URLs are
  *   unchanged. Both are hidden together when inventory is off.
- * - Delivery Orders (A4): the CSV importer (`/delivery-orders`) and the live
- *   marketplace pages (`/settings/delivery*`) are now ONE sidebar entry,
- *   cross-linked by `DeliverySubNav`. See that component's own comment for
- *   why the item itself is never gated on `delivery_platforms_enabled` even
- *   though its marketplace tabs are — gating the whole entry would silently
- *   remove the already-live CSV import for every non-entitled tenant. The
- *   entitlement switch only ever controls the marketplace tabs, never a
- *   claim that Uber/Mr D is actually connected and live.
+ * - Delivery Orders (A4, follow-up Part C4): the CSV/manual reconciliation
+ *   importer (`/delivery-orders`) and the live marketplace pages
+ *   (`/settings/delivery*`) are ONE sidebar entry, cross-linked by
+ *   `DeliverySubNav`. Shown while EITHER `delivery_reconciliation_enabled`
+ *   OR `delivery_platforms_enabled` is true (`requiresDeliveryAccess`) —
+ *   these are two independent commercial entitlements (reconciliation vs.
+ *   live marketplace), never one conflated flag. Hidden only when BOTH are
+ *   off. Inside the page, `DeliverySubNav` gates the CSV/Import tab on
+ *   `delivery_reconciliation_enabled` and the Connections/Orders/Menu
+ *   Mapping tabs on `delivery_platforms_enabled` — see that component's own
+ *   comment for the full per-tab breakdown and why a direct link to a
+ *   now-disabled tab redirects rather than rendering blank.
  * - Settings (A6): General/Setup/Import/Branding/Receipts/WhatsApp/Exports
  *   are grouped under one expandable "Settings" parent instead of being 7
  *   flat top-level entries. Billing is deliberately REMOVED from the nav
@@ -79,7 +95,7 @@ export const navItems: NavItem[] = [
   { to: '/loyalty', icon: Gift, label: 'Loyalty', requiresLoyalty: true },
   { to: '/staff', icon: Users, label: 'Staff' },
   { to: '/till', icon: Wallet, label: 'Till' },
-  { to: '/delivery-orders', icon: Bike, label: 'Delivery Orders' },
+  { to: '/delivery-orders', icon: Bike, label: 'Delivery Orders', requiresDeliveryAccess: true },
   { to: '/stock', icon: Boxes, label: 'Inventory', requiresInventory: true },
   { to: '/stocktake', icon: ClipboardCheck, label: 'Stocktake', requiresInventory: true },
   // Deliberately ungated here: Core Analytics (summary/top-items/daily) is
@@ -127,15 +143,34 @@ export function isNavItemVisible(
     is_whatsapp_enabled?: boolean;
     loyalty_enabled?: boolean;
     ready_to_trade?: boolean;
+    /**
+     * Precomputed `delivery_reconciliation_enabled || delivery_platforms_enabled`
+     * — see `requiresDeliveryAccess`'s own comment for why this is one
+     * OR-combined field rather than two AND-style `requires*` flags.
+     */
+    has_delivery_access?: boolean;
   } | undefined
 ): boolean {
   if (item.requiresInventory && !ctx?.inventory_enabled) return false;
   if (item.requiresWhatsapp && !ctx?.is_whatsapp_enabled) return false;
   if (item.requiresLoyalty && !ctx?.loyalty_enabled) return false;
+  if (item.requiresDeliveryAccess && !ctx?.has_delivery_access) return false;
   // Shown only once we positively know setup isn't finished — hidden while
   // ready_to_trade is unknown (undefined) or already true.
   if (item.requiresSetupIncomplete && ctx?.ready_to_trade !== false) return false;
   return true;
+}
+
+/**
+ * Shared computation of `ctx.has_delivery_access`, so `Sidebar.tsx` and
+ * `MobileSidebar.tsx` can't independently drift on the OR logic (same
+ * reasoning as `isNavItemVisible`/`visibleChildren` being the single shared
+ * predicate rather than two copies).
+ */
+export function hasDeliveryAccess(
+  settings: { delivery_platforms_enabled?: boolean; delivery_reconciliation_enabled?: boolean } | undefined
+): boolean {
+  return !!(settings?.delivery_platforms_enabled || settings?.delivery_reconciliation_enabled);
 }
 
 /** True if `item` (or any of its visible children) should render. Lets a

@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { PageHeader, PageSkeleton } from '@/components/shared/PageComponents';
+import { PageHeader, PageSkeleton, EmptyState } from '@/components/shared/PageComponents';
 import { DeliverySubNav } from '@/components/delivery/DeliverySubNav';
+import { useBusinessSettings } from '@/hooks/use-business-settings';
 import {
   AlertTriangle, CheckCircle2, Clock, Loader2, Upload, X, Truck, Link2,
 } from 'lucide-react';
@@ -140,19 +141,31 @@ export default function ExternalOrdersPage() {
   const [ackClosedPeriod, setAckClosedPeriod] = useState(false);
   const [includeCancelled, setIncludeCancelled] = useState(false);
 
+  // UI V2.1 follow-up (Part C4): CSV/manual reconciliation is gated on its
+  // own commercial entitlement, separate from delivery_platforms_enabled --
+  // see DeliverySubNav.tsx. The backend routes themselves do not yet
+  // enforce this (see shared/models/business.py's delivery_reconciliation_enabled
+  // comment) -- this page-level gate is deliberate UX only for now, same
+  // "hide while unknown" convention as every other entitlement gate.
+  const { data: settings, isLoading: settingsLoading } = useBusinessSettings();
+  const reconciliationEnabled = settings?.delivery_reconciliation_enabled === true;
+
   const { data: status, isLoading } = useQuery({
     queryKey: ['external-status'],
     queryFn: () => apiClient.get<StatusResponse>('/v1/business/external-orders/status'),
+    enabled: reconciliationEnabled,
   });
 
   const { data: batches } = useQuery({
     queryKey: ['external-batches'],
     queryFn: () => apiClient.get<BatchRow[]>('/v1/business/external-orders/batches'),
+    enabled: reconciliationEnabled,
   });
 
   const { data: menuItems } = useQuery({
     queryKey: ['menu-items'],
     queryFn: () => apiClient.get<MenuItem[]>('/v1/business/menu/items'),
+    enabled: reconciliationEnabled,
   });
 
   const { data: mappings } = useQuery({
@@ -161,6 +174,7 @@ export default function ExternalOrdersPage() {
       apiClient.get<Record<string, unknown>[]>(
         `/v1/business/external-orders/mappings?platform=${platform}`
       ),
+    enabled: reconciliationEnabled,
   });
 
   function reset(next?: Platform) {
@@ -262,6 +276,22 @@ export default function ExternalOrdersPage() {
     const used = new Set(Object.values(preview.resolved_mapping ?? {}));
     return preview.detected_columns.filter((c) => !used.has(c));
   }, [preview]);
+
+  if (settingsLoading) return <PageSkeleton />;
+
+  if (!reconciliationEnabled) {
+    return (
+      <div className="space-y-6">
+        <DeliverySubNav />
+        <PageHeader title="Delivery orders" />
+        <EmptyState
+          icon={<Truck className="w-10 h-10" />}
+          title="Delivery reconciliation isn't enabled for this business"
+          description="Contact NextGen support to switch on CSV/manual delivery-order reconciliation."
+        />
+      </div>
+    );
+  }
 
   if (isLoading) return <PageSkeleton />;
 

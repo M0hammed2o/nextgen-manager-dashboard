@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useBusinessSettings } from '@/hooks/use-business-settings';
 import { useSetupProgress } from '@/hooks/use-setup-progress';
-import { navItems, isNavItemVisible, visibleChildren } from './nav-items';
+import { navItems, isNavItemVisible, visibleChildren, hasDeliveryAccess } from './nav-items';
 import logoNextgen from '@/assets/logo-nextgen.jpeg';
 
 export function Sidebar() {
@@ -23,6 +23,7 @@ export function Sidebar() {
     is_whatsapp_enabled: settings?.is_whatsapp_enabled,
     loyalty_enabled: settings?.loyalty_enabled,
     ready_to_trade: setup?.ready_to_trade,
+    has_delivery_access: hasDeliveryAccess(settings),
   };
 
   const visibleItems = navItems.filter((item) => isNavItemVisible(item, ctx));
