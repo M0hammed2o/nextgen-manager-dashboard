@@ -2,7 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { createOrderStream } from '@/lib/sse';
 import type { Order, PaymentStatus, CreateOrderRequest, PaginatedResponse } from '@/types/api';
-import { formatCents, formatDateTime } from '@/lib/mappers';
+import { formatCents, formatDate, formatDateTime } from '@/lib/mappers';
+import { providerLabel } from '@/lib/providerRefund';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -416,6 +417,17 @@ export default function OrdersPage() {
                           <span>{formatCents(a.cash_tendered_cents)} / {formatCents(a.change_due_cents ?? 0)}</span>
                         </div>
                       )}
+                      {a.payment_method === 'PAY_BY_LINK' && a.provider_refund_status === 'PENDING_MANUAL' && (
+                        <p className="text-xs font-medium text-amber-600">
+                          Refund still required via {providerLabel(a.provider)} — NextGen has not returned this money.
+                        </p>
+                      )}
+                      {a.payment_method === 'PAY_BY_LINK' && a.provider_refund_status === 'CONFIRMED' && (
+                        <p className="text-xs text-muted-foreground">
+                          Refund confirmed via {providerLabel(a.provider)}
+                          {a.provider_refund_confirmed_at ? ` on ${formatDate(a.provider_refund_confirmed_at)}` : ''}
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -499,6 +511,14 @@ export default function OrdersPage() {
                   // no longer match any row on screen.
                   queryClient.invalidateQueries({ queryKey: ['orders'] });
                   setSelectedOrder(null);
+                }}
+                onOrderUpdated={(updated) => {
+                  // A reversal that still needs a Pay-by-Link refund done at
+                  // the provider (or the confirmation of one) keeps the drawer
+                  // open on the server's fresh copy, so the manager sees what
+                  // is left to do instead of a closed drawer.
+                  queryClient.invalidateQueries({ queryKey: ['orders'] });
+                  setSelectedOrder(updated);
                 }}
               />
             </div>

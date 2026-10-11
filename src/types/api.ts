@@ -193,6 +193,13 @@ export interface PaymentAllocation {
   payment_reference?: string | null;
   provider?: string | null;
   paid_at?: string | null;
+  // Only ever set on a PAY_BY_LINK allocation, and only once the order has
+  // been refunded/voided. NextGen records the refund but does NOT call
+  // Yoco/PayFast to return the money: PENDING_MANUAL means the provider-side
+  // refund still has to be done by hand; CONFIRMED means a manager has said
+  // it was done (POST /v1/business/pos/orders/{id}/confirm-provider-refund).
+  provider_refund_status?: 'PENDING_MANUAL' | 'CONFIRMED' | null;
+  provider_refund_confirmed_at?: string | null;
 }
 
 export interface Order {

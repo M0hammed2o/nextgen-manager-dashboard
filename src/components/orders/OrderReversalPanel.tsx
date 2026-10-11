@@ -2,7 +2,11 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, ApiError } from '@/lib/api-client';
 import type { Order } from '@/types/api';
-import { formatCents, parseRandsToCents, centsToRandsInput } from '@/lib/mappers';
+import { formatCents, formatDate, parseRandsToCents, centsToRandsInput } from '@/lib/mappers';
+import {
+  cashAllocatedCents, confirmedProviderRefunds, isMixedCashSplit,
+  knownProviderRefundCents, pendingProviderRefunds, providerLabel,
+} from '@/lib/providerRefund';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -47,20 +51,33 @@ export default function OrderReversalPanel({
   order,
   role,
   onDone,
+  onOrderUpdated,
 }: {
   order: Order;
   /** OWNER / MANAGER / STAFF — every endpoint below is manager-gated on the
    * backend too; this only controls whether the button is even shown. */
   role: string;
   onDone: () => void;
+  /** Called instead of onDone when the reversal left something for the
+   * manager still to do (a Pay-by-Link refund that has to be completed at
+   * the provider), so the parent can keep showing the fresh order rather
+   * than close it. Falls back to onDone when not supplied. */
+  onOrderUpdated?: (order: Order) => void;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<'none' | 'void' | 'refund'>('none');
   const [reason, setReason] = useState('');
   const [amountInput, setAmountInput] = useState('');
+  const [cashInput, setCashInput] = useState('');
+  // Set if the backend still says CASH_REFUND_PORTION_REQUIRED although this
+  // copy of the order did not look like a mixed split (stale data / race):
+  // show the field so the manager has a way forward instead of a dead end.
+  const [forceCashPortion, setForceCashPortion] = useState(false);
   const [restoreStock, setRestoreStock] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingProviderRefund, setConfirmingProviderRefund] = useState(false);
+  const [providerError, setProviderError] = useState<string | null>(null);
 
   const isManager = role === 'OWNER' || role === 'MANAGER';
   const isPos = order.source === 'POS';
@@ -77,13 +94,34 @@ export default function OrderReversalPanel({
 
   const remainingCents = order.total_cents - (order.refund_amount_cents ?? 0);
 
+  // A partial refund of a split order mixing cash and non-cash is the one
+  // shape where the backend refuses to guess the cash portion
+  // (CASH_REFUND_PORTION_REQUIRED). Every other shape — any full refund, or a
+  // partial of an all-cash / all-non-cash split — is deterministic, so the
+  // field is not shown at all. "Partial" is relative to total_cents, exactly
+  // as the backend compares it.
+  const mixedCashSplit = isPos && isMixedCashSplit(order);
+  const cashAllocated = cashAllocatedCents(order);
+  const parsedAmountCents = parseRandsToCents(amountInput);
+  const isPartialAmount =
+    parsedAmountCents !== null && parsedAmountCents > 0 && parsedAmountCents < order.total_cents;
+  const needsCashPortion = isPos && isPartialAmount && (mixedCashSplit || forceCashPortion);
+
   const refundMutation = useMutation({
-    mutationFn: async (body: { amount_cents: number; reason: string; restore_stock?: boolean }) => {
+    mutationFn: async (body: {
+      amount_cents: number;
+      reason: string;
+      restore_stock?: boolean;
+      cash_refund_cents?: number;
+    }) => {
       if (isPos) {
         return apiClient.post<Order>(`/v1/business/pos/orders/${order.id}/refund`, {
           amount_cents: body.amount_cents,
           reason: body.reason,
           restore_stock: body.restore_stock ?? false,
+          // Only sent when it was actually collected — the backend computes
+          // it itself for every other refund shape.
+          ...(body.cash_refund_cents !== undefined ? { cash_refund_cents: body.cash_refund_cents } : {}),
         });
       }
       return apiClient.post<RefundResponse>(`/v1/business/orders/${order.id}/refund`, {
@@ -98,10 +136,85 @@ export default function OrderReversalPanel({
       apiClient.post<Order>(`/v1/business/pos/orders/${order.id}/void`, body),
   });
 
+  const confirmProviderRefundMutation = useMutation({
+    mutationFn: () =>
+      apiClient.post<Order>(`/v1/business/pos/orders/${order.id}/confirm-provider-refund`),
+  });
+
+  function friendlyError(err: unknown): string {
+    if (err instanceof ApiError) {
+      switch (err.code) {
+        case 'TILL_NOT_OPEN':
+          return 'Cash refunds and voids must go into an open till. Open the till on the staff app, then try again.';
+        case 'CASH_REFUND_PORTION_REQUIRED':
+          return 'Please specify how much of this refund is being returned in cash.';
+        case 'CASH_REFUND_PORTION_INVALID':
+          return 'The cash part of this refund cannot be more than the refund amount, or more than this order was paid in cash.';
+        case 'NO_PENDING_PROVIDER_REFUND':
+          return 'This Pay-by-Link refund has already been marked as completed.';
+      }
+      return err.message;
+    }
+    return err instanceof Error ? err.message : 'Could not complete that — try again.';
+  }
+
+  /** After a refund/void: if a Pay-by-Link portion still has to be refunded
+   * at the provider, say so instead of a plain "Refund recorded", and keep
+   * the fresh order on screen so the manager sees what's left to do. */
+  function finishReversal(updated: Order | null, plainTitle: string, plainDescription: string) {
+    queryClient.invalidateQueries({ queryKey: ['orders'] });
+    const pending = updated ? pendingProviderRefunds(updated) : [];
+    if (updated && pending.length > 0) {
+      const who = providerLabel(pending[0].provider);
+      const knownCents = knownProviderRefundCents(updated, pending[0]);
+      toast({
+        title: updated.payment_status === 'VOIDED' ? 'Void recorded in NextGen' : 'Refund recorded in NextGen',
+        description:
+          knownCents !== null && pending.length === 1
+            ? `${formatCents(knownCents)} Pay-by-Link refund via ${who} still required.`
+            : `Pay-by-Link refund via ${who} still required.`,
+      });
+      resetForm();
+      if (onOrderUpdated) onOrderUpdated(updated);
+      else onDone();
+      return;
+    }
+    toast({ title: plainTitle, description: plainDescription });
+    resetForm();
+    onDone();
+  }
+
+  async function confirmProviderRefund() {
+    setProviderError(null);
+    try {
+      const updated = await confirmProviderRefundMutation.mutateAsync();
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      toast({ title: 'Pay-by-Link refund marked as completed' });
+      setConfirmingProviderRefund(false);
+      if (onOrderUpdated) onOrderUpdated(updated);
+      else onDone();
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'NO_PENDING_PROVIDER_REFUND') {
+        // Already confirmed (e.g. a double-click, or another manager) — not
+        // an error from the manager's point of view. Refresh and move on.
+        queryClient.invalidateQueries({ queryKey: ['orders'] });
+        toast({ title: 'Already marked as completed', description: friendlyError(err) });
+        setConfirmingProviderRefund(false);
+        onDone();
+        return;
+      }
+      setProviderError(friendlyError(err));
+    }
+  }
+
   if (!isManager) return null;
   if (!alreadyReversed && !posEligible && !providerEligible) return null;
 
   if (alreadyReversed) {
+    const pending = pendingProviderRefunds(order);
+    const confirmed = confirmedProviderRefunds(order);
+    const recordedWord = order.payment_status === 'VOIDED' ? 'Void' : 'Refund';
+    const confirming = confirmProviderRefundMutation.isPending;
     return (
       <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
         <p className="font-medium text-foreground">
@@ -113,24 +226,79 @@ export default function OrderReversalPanel({
             {order.refund_reference ? ` · ${order.refund_reference}` : ''}
           </p>
         ) : null}
+
+        {pending.length > 0 && (
+          <div
+            className="mt-3 rounded-md border border-amber-500/50 bg-amber-500/10 p-2.5"
+            data-testid="provider-refund-pending"
+          >
+            {pending.map((a, i) => {
+              const knownCents = knownProviderRefundCents(order, a);
+              return (
+                <p key={i} className="font-medium text-foreground">
+                  {knownCents !== null
+                    ? `${recordedWord} recorded in NextGen — ${formatCents(knownCents)} Pay-by-Link refund via ${providerLabel(a.provider)} still required.`
+                    : `${recordedWord} recorded in NextGen — Pay-by-Link refund via ${providerLabel(a.provider)} still required (the customer paid ${formatCents(a.amount_cents)} by Pay-by-Link; refund only the part of this refund that came from it).`}
+                </p>
+              );
+            })}
+            <p className="mt-1 text-xs text-muted-foreground">
+              NextGen has not returned this money to the customer. Refund it in your{' '}
+              {providerLabel(pending[0].provider)} dashboard, then mark it completed here.
+            </p>
+            {!confirmingProviderRefund ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="mt-2"
+                onClick={() => { setProviderError(null); setConfirmingProviderRefund(true); }}
+              >
+                Mark provider refund completed
+              </Button>
+            ) : (
+              <div className="mt-2 space-y-2">
+                <p className="text-xs text-foreground">
+                  Confirm you've actually refunded this via the {providerLabel(pending[0].provider)} dashboard.
+                  NextGen can't check this for you.
+                </p>
+                <div className="flex gap-2">
+                  <Button type="button" size="sm" disabled={confirming} onClick={confirmProviderRefund}>
+                    {confirming ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Yes, it's been refunded
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={confirming}
+                    onClick={() => setConfirmingProviderRefund(false)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+            {providerError && <p className="mt-2 text-sm font-medium text-destructive">{providerError}</p>}
+          </div>
+        )}
+
+        {pending.length === 0 && confirmed.map((a, i) => (
+          <p key={i} className="mt-2 text-muted-foreground" data-testid="provider-refund-confirmed">
+            Pay-by-Link refund confirmed via {providerLabel(a.provider)}
+            {a.provider_refund_confirmed_at ? ` on ${formatDate(a.provider_refund_confirmed_at)}` : ''}.
+          </p>
+        ))}
       </div>
     );
-  }
-
-  function friendlyError(err: unknown): string {
-    if (err instanceof ApiError) {
-      if (err.code === 'TILL_NOT_OPEN') {
-        return 'Cash refunds and voids must go into an open till. Open the till on the staff app, then try again.';
-      }
-      return err.message;
-    }
-    return err instanceof Error ? err.message : 'Could not complete that — try again.';
   }
 
   function resetForm() {
     setMode('none');
     setReason('');
     setAmountInput('');
+    setCashInput('');
+    setForceCashPortion(false);
     setRestoreStock(false);
     setError(null);
   }
@@ -153,11 +321,8 @@ export default function OrderReversalPanel({
     }
     setError(null);
     try {
-      await voidMutation.mutateAsync({ reason: reason.trim() });
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
-      toast({ title: 'Sale voided', description: 'The stock deduction has been reversed.' });
-      resetForm();
-      onDone();
+      const updated = await voidMutation.mutateAsync({ reason: reason.trim() });
+      finishReversal(updated ?? null, 'Sale voided', 'The stock deduction has been reversed.');
     } catch (err) {
       setError(friendlyError(err));
     }
@@ -177,12 +342,32 @@ export default function OrderReversalPanel({
       setError(`Refund amount cannot exceed ${formatCents(remainingCents)}.`);
       return;
     }
+    // Mirror the backend's two caps exactly (routes_pos.py refund_pos_order)
+    // so the manager gets instant feedback rather than a round-trip 422.
+    let cashRefundCents: number | undefined;
+    if (needsCashPortion) {
+      const cash = parseRandsToCents(cashInput);
+      if (cash === null) {
+        setError('Enter how much of this refund is being returned in cash (enter 0 if none of it is cash).');
+        return;
+      }
+      if (cash > amountCents) {
+        setError(`The cash part cannot be more than the refund amount (${formatCents(amountCents)}).`);
+        return;
+      }
+      if (mixedCashSplit && cash > cashAllocated) {
+        setError(`The cash part cannot be more than this order was paid in cash (${formatCents(cashAllocated)}).`);
+        return;
+      }
+      cashRefundCents = cash;
+    }
     setError(null);
     try {
       const result = await refundMutation.mutateAsync({
         amount_cents: amountCents,
         reason: reason.trim(),
         restore_stock: isPos ? restoreStock : undefined,
+        cash_refund_cents: cashRefundCents,
       });
 
       // The provider endpoint returns 200 even when the provider refund did
@@ -204,11 +389,15 @@ export default function OrderReversalPanel({
         }
       }
 
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
-      toast({ title: 'Refund recorded', description: formatCents(amountCents) });
-      resetForm();
-      onDone();
+      finishReversal(
+        isPos ? ((result as Order | undefined) ?? null) : null,
+        'Refund recorded',
+        formatCents(amountCents),
+      );
     } catch (err) {
+      if (err instanceof ApiError && err.code === 'CASH_REFUND_PORTION_REQUIRED') {
+        setForceCashPortion(true);
+      }
       setError(friendlyError(err));
     }
   }
@@ -296,6 +485,25 @@ export default function OrderReversalPanel({
                   Up to {formatCents(remainingCents)} refundable.
                 </p>
               </div>
+              {needsCashPortion && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="refund-cash-portion">
+                    How much of this refund is being returned in cash? (R)
+                  </Label>
+                  <Input
+                    id="refund-cash-portion"
+                    inputMode="decimal"
+                    value={cashInput}
+                    onChange={(e) => setCashInput(e.target.value)}
+                    placeholder="e.g. 0.00"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {mixedCashSplit
+                      ? `This order was paid partly in cash (${formatCents(cashAllocated)}) and partly another way. Enter 0 if none of this refund is cash.`
+                      : 'Enter 0 if none of this refund is cash.'}
+                  </p>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label htmlFor="refund-reason">Reason (required)</Label>
                 <Textarea

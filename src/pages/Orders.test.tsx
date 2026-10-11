@@ -138,3 +138,63 @@ describe('OrdersPage — order source filter and badge', () => {
     expect(screen.getByRole('button', { name: /clear source filter/i })).toBeInTheDocument();
   });
 });
+
+describe('OrdersPage — Pay-by-Link refund status in the payment breakdown', () => {
+  afterEach(() => vi.clearAllMocks());
+
+  function splitOrder(status: 'PENDING_MANUAL' | 'CONFIRMED' | null): Order {
+    return makeOrder({
+      id: 'o9',
+      order_number: '1009',
+      source: 'POS',
+      payment_method: 'SPLIT',
+      payment_status: status ? 'REFUNDED' : 'PAID',
+      refund_amount_cents: status ? 35000 : null,
+      total_cents: 35000,
+      subtotal_cents: 35000,
+      payment_allocations: [
+        { payment_method: 'CASH', amount_cents: 5000 },
+        {
+          payment_method: 'PAY_BY_LINK',
+          amount_cents: 30000,
+          provider: 'YOCO',
+          provider_refund_status: status,
+          provider_refund_confirmed_at: status === 'CONFIRMED' ? '2026-10-11T09:00:00Z' : null,
+        },
+      ],
+    });
+  }
+
+  async function openDetail() {
+    await waitFor(() => expect(screen.getByText('#1009')).toBeInTheDocument());
+    const row = screen.getByText('#1009').closest('tr')!;
+    fireEvent.click(row.querySelector('.lucide-eye')!.closest('button')!);
+    return screen.findByText('Payment Breakdown');
+  }
+
+  it('flags a PENDING_MANUAL Pay-by-Link line as still needing a refund at the provider', async () => {
+    mockOrdersList([splitOrder('PENDING_MANUAL')]);
+    renderWithClient(<OrdersPage />);
+    await openDetail();
+    expect(screen.getByText(/refund still required via yoco/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /mark provider refund completed/i })).toBeInTheDocument();
+  });
+
+  it('shows a CONFIRMED Pay-by-Link line as resolved, with no action button', async () => {
+    mockOrdersList([splitOrder('CONFIRMED')]);
+    renderWithClient(<OrdersPage />);
+    await openDetail();
+    // Appears in the breakdown line and in the reversal panel's summary.
+    expect(screen.getAllByText(/refund confirmed via yoco on/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(/still required/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /mark provider refund completed/i })).not.toBeInTheDocument();
+  });
+
+  it('shows no refund status on a Pay-by-Link line that was never refunded', async () => {
+    mockOrdersList([splitOrder(null)]);
+    renderWithClient(<OrdersPage />);
+    await openDetail();
+    expect(screen.queryByText(/refund still required/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/refund confirmed/i)).not.toBeInTheDocument();
+  });
+});
