@@ -1,4 +1,5 @@
 import { API_BASE_URL } from './api-client';
+import { authStorage } from './auth-storage';
 
 /**
  * Shared live-order SSE connection helper, used by both `Orders.tsx` and
@@ -21,8 +22,13 @@ export interface OrderStreamHandle {
   close: () => void;
 }
 
+// Routed through authStorage (src/lib/auth-storage.ts) rather than reading
+// localStorage/sessionStorage directly, so a device where real storage
+// throws/is restricted (the Safari/iPad class of failure fixed for login in
+// BUG-0140) still finds the token via its in-memory fallback tier instead of
+// this stream silently never authenticating. See KNOWN_BUGS.md BUG-0141.
 function getStoredToken(): string | null {
-  return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+  return authStorage.getItem('access_token');
 }
 
 /**

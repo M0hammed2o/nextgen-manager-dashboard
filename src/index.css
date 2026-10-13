@@ -190,6 +190,23 @@
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
+  /* Caps any dialog/modal to a height that always fits inside the visible
+     viewport, with the rest scrolling internally. Base Dialog (ui/dialog.tsx)
+     applies this to every modal so a call site that forgets its own
+     max-h/overflow override (several did, e.g. Staff.tsx, SuppliersPage.tsx,
+     WastagePage.tsx, MenuPage.tsx's category dialogs) still fits on a short
+     iPad landscape viewport instead of rendering its header off the top and
+     its action buttons off the bottom with no way to scroll to them. `dvh`
+     (the visible-viewport unit, correctly excluding a dynamic Safari
+     toolbar) is declared second so a browser without it (pre iOS 15.4) keeps
+     the `vh` line instead of dropping the whole max-height — same fallback
+     pattern as the staff PWA's dialog fix, KNOWN_BUGS.md BUG-0136. */
+  .dialog-viewport-cap {
+    max-height: 90vh;
+    max-height: 90dvh;
+    overflow-y: auto;
+  }
+
   .glass-card {
     @apply bg-card/80 backdrop-blur-sm border border-border/50 rounded-lg;
   }

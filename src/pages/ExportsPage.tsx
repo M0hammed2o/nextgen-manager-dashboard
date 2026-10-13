@@ -7,6 +7,7 @@ import { Download, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { API_BASE_URL } from '@/lib/api-client';
+import { authStorage } from '@/lib/auth-storage';
 import { PageHeader } from '@/components/shared/PageComponents';
 
 export default function ExportsPage() {
@@ -18,7 +19,10 @@ export default function ExportsPage() {
   const handleExport = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('access_token');
+      // Routed through authStorage so this still works on a device where
+      // real localStorage throws/is restricted (see KNOWN_BUGS.md BUG-0141,
+      // BUG-0140) instead of silently sending `Authorization: Bearer null`.
+      const token = authStorage.getItem('access_token');
       const params = new URLSearchParams({ days });
       if (status !== 'all') params.set('status', status);
 
