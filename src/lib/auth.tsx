@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { AuthUser, LoginRequest, LoginResponse, SetPasswordRequest } from '@/types/api';
 import { apiClient } from './api-client';
+import { authStorage } from './auth-storage';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -16,19 +17,19 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => {
     try {
-      const stored = localStorage.getItem('auth_user');
+      const stored = authStorage.getItem('auth_user');
       return stored ? JSON.parse(stored) : null;
     } catch { return null; }
   });
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
+    const token = authStorage.getItem('access_token');
     if (token) {
       apiClient.get<AuthUser>('/v1/auth/me')
         .then((u) => {
           setUser(u);
-          localStorage.setItem('auth_user', JSON.stringify(u));
+          authStorage.setItem('auth_user', JSON.stringify(u));
         })
         .catch(() => {
           apiClient.clearTokens();
@@ -41,32 +42,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (req: LoginRequest) => {
-    const res = await apiClient.post<LoginResponse>('/v1/auth/login', req);
-    localStorage.setItem('access_token', res.tokens.access_token);
-    localStorage.setItem('refresh_token', res.tokens.refresh_token);
-    localStorage.setItem('auth_user', JSON.stringify(res.user));
+    // Normalize the email before it ever reaches the network call: iOS/iPadOS
+    // autofill is prone to inserting leading/trailing whitespace and
+    // autocapitalizing the first letter. The password is passed through
+    // completely unchanged -- trimming or altering it would silently corrupt
+    // a password that genuinely contains leading/trailing whitespace.
+    const normalizedReq: LoginRequest = { ...req, email: req.email.trim().toLowerCase() };
+    const res = await apiClient.post<LoginResponse>('/v1/auth/login', normalizedReq);
+    authStorage.setItem('access_token', res.tokens.access_token);
+    authStorage.setItem('refresh_token', res.tokens.refresh_token);
+    authStorage.setItem('auth_user', JSON.stringify(res.user));
     setUser(res.user);
   }, []);
 
   const setNewPassword = useCallback(async (req: SetPasswordRequest) => {
     // Same response shape as /auth/login — auto-logs-in on success.
     const res = await apiClient.post<LoginResponse>('/v1/auth/set-password', req);
-    localStorage.setItem('access_token', res.tokens.access_token);
-    localStorage.setItem('refresh_token', res.tokens.refresh_token);
-    localStorage.setItem('auth_user', JSON.stringify(res.user));
+    authStorage.setItem('access_token', res.tokens.access_token);
+    authStorage.setItem('refresh_token', res.tokens.refresh_token);
+    authStorage.setItem('auth_user', JSON.stringify(res.user));
     setUser(res.user);
   }, []);
 
   const logout = useCallback(async () => {
     // Clear client-side session state first -- the user is logged out the
-    // moment their own token/localStorage is gone, regardless of whether
-    // the server-side refresh-token revocation succeeds. Awaiting that
-    // network call before clearing local state (the previous order here)
-    // meant a slow/hanging request could block the UI from ever logging
-    // the user out at all, since there is no request timeout anywhere in
-    // apiClient. The revocation call is still made, just as a best-effort
-    // background cleanup that can't block or fail the logout itself.
-    const rt = localStorage.getItem('refresh_token');
+    // moment their own token/storage is gone, regardless of whether the
+    // server-side refresh-token revocation succeeds. Awaiting that network
+    // call before clearing local state (the previous order here) meant a
+    // slow/hanging request could block the UI from ever logging the user
+    // out at all, since there is no request timeout anywhere in apiClient.
+    // The revocation call is still made, just as a best-effort background
+    // cleanup that can't block or fail the logout itself.
+    const rt = authStorage.getItem('refresh_token');
     apiClient.clearTokens();
     setUser(null);
     if (rt) {

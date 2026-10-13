@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { ApiError } from '@/lib/api-client';
+import { AuthStorageError } from '@/lib/auth-storage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,8 +25,17 @@ export default function LoginPage() {
   const [newPassword, setNewPasswordValue] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // Navigate away as an effect, not during render: a render-time navigate()
+  // call is a side effect during render, which React (and browser engines,
+  // inconsistently) does not guarantee runs predictably. Render `null` below
+  // while we're authenticated and waiting for the effect/redirect.
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+
   if (isAuthenticated) {
-    navigate('/', { replace: true });
     return null;
   }
 
@@ -42,6 +52,11 @@ export default function LoginPage() {
         setCurrentPassword('');
         setNewPasswordValue('');
         setConfirmPassword('');
+      } else if (err instanceof AuthStorageError) {
+        // The login call itself succeeded -- this is a client-side storage
+        // failure, not bad credentials. Show an honest, distinct message
+        // rather than letting it look like a login failure.
+        setError(err.message);
       } else {
         setError(err instanceof Error ? err.message : 'Login failed');
       }

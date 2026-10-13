@@ -1,3 +1,5 @@
+import { authStorage } from './auth-storage';
+
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.nextgenintelligence.co.za';
 
 /**
@@ -25,22 +27,22 @@ class ApiClient {
   }
 
   private getAccessToken(): string | null {
-    return localStorage.getItem('access_token');
+    return authStorage.getItem('access_token');
   }
 
   private getRefreshToken(): string | null {
-    return localStorage.getItem('refresh_token');
+    return authStorage.getItem('refresh_token');
   }
 
   private setTokens(access: string, refresh: string) {
-    localStorage.setItem('access_token', access);
-    localStorage.setItem('refresh_token', refresh);
+    authStorage.setItem('access_token', access);
+    authStorage.setItem('refresh_token', refresh);
   }
 
   clearTokens() {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('auth_user');
+    authStorage.removeItem('access_token');
+    authStorage.removeItem('refresh_token');
+    authStorage.removeItem('auth_user');
   }
 
   private async refreshAccessToken(): Promise<boolean> {
