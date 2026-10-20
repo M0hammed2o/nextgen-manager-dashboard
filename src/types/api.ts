@@ -516,6 +516,20 @@ export interface BusinessSettings {
   // LoyaltyProgram.is_enabled alone — Loyalty is sold in NextGen Complete
   // (from R2,499) and above.
   loyalty_enabled: boolean;
+  // WhatsApp-only subscription support (2026-10): platform-admin-set,
+  // business-plane READ-ONLY, same pattern as inventory_enabled/
+  // is_whatsapp_enabled above. False for a tenant whose subscription has no
+  // POS/till module at all — gates `requiresPos` nav items (nav-items.ts,
+  // currently only `/till`) and the Till (POS) Settings section below.
+  // CONTRACT ASSUMPTION (backend branch feat/whatsapp-only-subscription not
+  // yet landed at the time this field was added): assumed present and
+  // boolean, defaulting true for every existing tenant. Treated as `true`
+  // whenever absent/undefined (an older cached settings response, or a
+  // backend that hasn't shipped this field yet) so no existing POS tenant
+  // ever loses Till access as a side effect of this rollout — see
+  // isNavItemVisible's `requiresPos` handling and SettingsPage.tsx's Till
+  // section gate, both of which treat `undefined`/`true` the same way.
+  pos_enabled?: boolean;
 }
 
 // WhatsApp pause/busy toggle
@@ -610,6 +624,73 @@ export interface DigitalReceiptsUsage {
   receipts_requested: number;
   whatsapp_sent: number;
   whatsapp_failed: number;
+}
+
+// ── WhatsApp order allowance/usage (2026-10, WhatsApp-only subscriptions) —
+//    GET /v1/business/usage/whatsapp-orders. CONTRACT ASSUMPTION: backend
+//    branch feat/whatsapp-only-subscription had not landed when this type
+//    was written — shape taken directly from the task brief; reconcile
+//    against the real response once that branch merges. The allowance
+//    fields are null for the (currently overwhelming) majority of tenants
+//    that have no configured WhatsApp order allowance at all — the UI must
+//    render nothing extra in that case, not a broken "0 of null" display.
+export type WhatsAppUsageTier = 'ok' | 'warning_80' | 'warning_90' | 'exceeded';
+
+export interface WhatsAppOrderUsage {
+  period_start: string;
+  orders_used: number;
+  orders_allowance: number | null;
+  orders_remaining: number | null;
+  pct_used: number | null;
+  tier: WhatsAppUsageTier;
+}
+
+// ── Customers (2026-10, closes the "no Customers page at all" gap —
+//    PRODUCT_MAP.md/architecture-audit finding, not a POS-only or
+//    WhatsApp-only-specific feature). CONTRACT ASSUMPTION: backend branch
+//    feat/whatsapp-only-subscription had not landed when these types were
+//    written.
+//
+//    GET /v1/business/customers?page=&per_page=&search= brief only
+//    specifies the per-row shape ({ id, display_name, order_count,
+//    total_spent_cents, last_order_at }[]), not the pagination envelope or
+//    whether a phone number is included. Assumed here, to be reconciled:
+//    (1) a page-number pagination envelope (page/per_page/total/
+//    total_pages) rather than this app's existing cursor-based
+//    PaginatedResponse<T> (Orders.tsx), since the query params are
+//    page/per_page, not cursor; (2) a `phone_number` field alongside
+//    `display_name`, matching the existing CustomerLoyalty shape
+//    (LoyaltyPage.tsx) and the task brief's own "name/phone" UI
+//    requirement, even though the brief's literal field list omits it. ──
+export interface Customer {
+  id: string;
+  display_name: string;
+  phone_number: string | null;
+  order_count: number;
+  total_spent_cents: number;
+  last_order_at: string | null;
+}
+
+export interface CustomersPaginationMeta {
+  page: number;
+  per_page: number;
+  total: number;
+  total_pages: number;
+}
+
+export interface CustomersListResponse {
+  data: Customer[];
+  pagination: CustomersPaginationMeta;
+}
+
+/**
+ * GET /v1/business/customers/{id} — the Customer fields above plus order
+ * history. Brief says this reuses "whatever this dashboard's existing order
+ * list items already use" — that's `Order` (types/api.ts, used by
+ * Orders.tsx), reused as-is rather than inventing a second order shape.
+ */
+export interface CustomerDetail extends Customer {
+  orders: Order[];
 }
 
 /** POST /v1/business/orders/{order_id}/receipt/resend */

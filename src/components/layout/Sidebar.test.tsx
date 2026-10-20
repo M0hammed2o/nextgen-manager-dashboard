@@ -21,6 +21,12 @@ function mockApi({
   // combination itself is covered by its own dedicated tests below.
   deliveryPlatformsEnabled = true,
   deliveryReconciliationEnabled = false,
+  // Undefined by default (not `true`) deliberately — matches a settings
+  // response from a backend that hasn't shipped `pos_enabled` yet, or one
+  // that simply hasn't loaded. Till must still render in that case; see the
+  // dedicated "Till visibility" describe block below for the explicit-false
+  // case.
+  posEnabled = undefined as boolean | undefined,
 }: {
   readyToTrade?: boolean;
   inventoryEnabled?: boolean;
@@ -28,6 +34,7 @@ function mockApi({
   loyaltyEnabled?: boolean;
   deliveryPlatformsEnabled?: boolean;
   deliveryReconciliationEnabled?: boolean;
+  posEnabled?: boolean;
 } = {}) {
   vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
     if (url === '/v1/business/settings') {
@@ -37,6 +44,7 @@ function mockApi({
         loyalty_enabled: loyaltyEnabled,
         delivery_platforms_enabled: deliveryPlatformsEnabled,
         delivery_reconciliation_enabled: deliveryReconciliationEnabled,
+        pos_enabled: posEnabled,
       } as never;
     }
     if (url === '/v1/business/setup/progress') {
@@ -168,5 +176,43 @@ describe('Sidebar — UI V2.1 expandable Settings group (A6)', () => {
     renderSidebar('/');
 
     await waitFor(() => expect(screen.getByText('Delivery Orders')).toBeInTheDocument());
+  });
+
+  it('always shows Customers, ungated, regardless of any entitlement', async () => {
+    mockApi({ inventoryEnabled: false, whatsappEnabled: false, posEnabled: false });
+    renderSidebar('/');
+
+    await waitFor(() => expect(screen.getByText('Customers')).toBeInTheDocument());
+  });
+});
+
+describe('Till visibility — requiresPos (WhatsApp-only subscription support, 2026-10)', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('shows Till while pos_enabled has not loaded yet / is absent from settings', async () => {
+    mockApi();
+    renderSidebar('/');
+    await waitFor(() => expect(screen.getByText('Dashboard')).toBeInTheDocument());
+    expect(screen.getByText('Till')).toBeInTheDocument();
+  });
+
+  it('shows Till while pos_enabled is true (the POS-enabled majority)', async () => {
+    mockApi({ posEnabled: true });
+    renderSidebar('/');
+    await waitFor(() => expect(screen.getByText('Till')).toBeInTheDocument());
+  });
+
+  it('hides Till once pos_enabled is explicitly false (WhatsApp-only tenant)', async () => {
+    mockApi({ posEnabled: false });
+    renderSidebar('/');
+    await waitFor(() => expect(screen.getByText('Dashboard')).toBeInTheDocument());
+    // Unlike every other gate in this file, Till is VISIBLE before settings
+    // resolve (pos_enabled defaults to "shown" while unknown — see
+    // nav-items.ts), so this needs its own waitFor rather than reading
+    // straight off the first render: it must disappear only once the
+    // settings fetch actually resolves with pos_enabled === false.
+    await waitFor(() => expect(screen.queryByText('Till')).not.toBeInTheDocument());
   });
 });

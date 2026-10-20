@@ -24,7 +24,7 @@ import { useToast } from '@/hooks/use-toast';
 
 // ── Status colour maps ───────────────────────────────────────────────────────
 
-const statusColors: Record<string, string> = {
+export const statusColors: Record<string, string> = {
   NEW: 'bg-warning/10 text-warning',
   ACCEPTED: 'bg-primary/10 text-primary',
   IN_PROGRESS: 'bg-accent text-accent-foreground',
@@ -84,13 +84,43 @@ const sourceBadgeClassName: Record<string, string> = {
   OTHER_EXTERNAL: 'bg-muted text-muted-foreground border-border',
 };
 
-function OrderSourceBadge({ source }: { source: string }) {
+export function OrderSourceBadge({ source }: { source: string }) {
   return (
     <StatusBadge
       variant="outline"
       label={sourceLabels[source] ?? source}
       className={sourceBadgeClassName[source] ?? 'bg-muted text-muted-foreground border-border'}
     />
+  );
+}
+
+/**
+ * One row of an order-history list — reused by CustomersPage.tsx's customer
+ * detail view so a customer's past orders render with exactly the same
+ * status/payment colours, source badge and currency/date formatting as this
+ * page's own order list, instead of a second, independently-maintained
+ * summary row shape.
+ */
+export function OrderHistoryRow({ order }: { order: Order }) {
+  return (
+    <div className="flex items-center justify-between gap-3 p-3 rounded-lg bg-muted/30">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-foreground">#{order.order_number}</p>
+        <div className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground">
+          <span>{formatDateTime(order.created_at)}</span>
+          <OrderSourceBadge source={order.source} />
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColors[order.status] ?? 'bg-muted text-muted-foreground'}`}>
+          {order.status}
+        </span>
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${paymentColors[order.payment_status ?? 'PENDING']}`}>
+          {paymentLabels[order.payment_status ?? 'PENDING']}
+        </span>
+        <span className="text-sm font-medium text-foreground">{formatCents(order.total_cents)}</span>
+      </div>
+    </div>
   );
 }
 
