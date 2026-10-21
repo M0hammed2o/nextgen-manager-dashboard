@@ -24,6 +24,7 @@ export function Sidebar() {
     loyalty_enabled: settings?.loyalty_enabled,
     ready_to_trade: setup?.ready_to_trade,
     has_delivery_access: hasDeliveryAccess(settings),
+    pos_enabled: settings?.pos_enabled,
   };
 
   const visibleItems = navItems.filter((item) => isNavItemVisible(item, ctx));

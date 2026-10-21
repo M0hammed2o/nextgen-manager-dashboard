@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { formatDateTime } from '@/lib/mappers';
+import { WhatsAppUsageCard } from '@/components/dashboard/WhatsAppUsageCard';
 import { useState } from 'react';
 
 type Period = 'today' | '7d' | '30d';
@@ -82,6 +83,12 @@ export default function DashboardPage() {
         <StatCard label="Messages" value={summary.totalMessages} icon={<MessageSquare className="w-5 h-5" />} />
         <StatCard label="Unique Customers" value={summary.uniqueCustomers} icon={<Users className="w-5 h-5" />} />
       </div>
+
+      {/* WhatsApp-only subscription support (2026-10): renders nothing when
+          the tenant has no configured WhatsApp order allowance (today's
+          majority) or while loading/erroring — see the component's own
+          comment. */}
+      <WhatsAppUsageCard />
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

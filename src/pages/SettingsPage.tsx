@@ -348,8 +348,15 @@ export default function SettingsPage() {
           and order_creator.py — never by routes_pos.py). Hidden for a
           POS-only tenant (`is_whatsapp_enabled === false`), same
           hide-not-disable pattern as `requiresInventory` nav items — see
-          KNOWN_BUGS.md. Till (POS) Settings and Staff App Navigation below
-          stay visible regardless, since POS-only businesses still need them. */}
+          KNOWN_BUGS.md. Staff App Navigation below stays visible
+          regardless: none of its three tabs (Live Orders, Wastage,
+          Stocktake) is actually till/cashier-specific — Live Orders is
+          about WhatsApp orders (see its own description below), and
+          Wastage/Stocktake are inventory-module features, not POS ones —
+          so a WhatsApp-only tenant still needs this section. Till (POS)
+          Settings, immediately below, is the one section that IS
+          genuinely till-specific and is gated separately on
+          `pos_enabled`. */}
       {(settings?.is_whatsapp_enabled ?? true) && (
       <>
       {/* Chatbot */}
@@ -667,7 +674,16 @@ export default function SettingsPage() {
       )}
 
       {/* Till (POS) Settings — distinct from the WhatsApp/online Payment
-          Settings above: these control what a cashier sees at the till. */}
+          Settings above: these control what a cashier sees at the till.
+          WhatsApp-only subscription support (2026-10): hidden for a tenant
+          whose POS module is switched off (`pos_enabled === false`) — a
+          WhatsApp-only restaurant has no cashier and no till to configure.
+          `!== false` (not `?? true`) is deliberate: treats a missing field
+          (older cached response, or a backend that hasn't shipped this yet)
+          the same as `true`, same default-safety direction as `requiresPos`
+          in nav-items.ts, so no existing POS tenant loses this section as a
+          side effect of this rollout. */}
+      {(settings?.pos_enabled !== false) && (
       <section className="bg-card border border-border rounded-xl p-6 space-y-4">
         <h3 className="font-semibold text-foreground">Till (POS) Settings</h3>
         <p className="text-sm text-muted-foreground">
@@ -728,6 +744,7 @@ export default function SettingsPage() {
           />
         </div>
       </section>
+      )}
 
       {/* Staff app navigation — which tabs the Staff PWA's bottom bar shows.
           A phone bar holds five, so a restaurant should spend them on what it

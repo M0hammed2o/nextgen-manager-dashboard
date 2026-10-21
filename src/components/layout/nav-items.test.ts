@@ -160,11 +160,52 @@ describe('UI V2.1 consolidation (A2-A6)', () => {
     ]);
   });
 
-  it('the final top-level nav order matches the brief: Dashboard, (Setup), Orders, Menu, Specials, (Loyalty), Staff, Till, Delivery Orders, (Inventory), (Stocktake), Analytics, Settings', () => {
+  it('the final top-level nav order matches the brief: Dashboard, (Setup), Orders, Menu, Specials, (Loyalty), Customers, Staff, Till, Delivery Orders, (Inventory), (Stocktake), Analytics, Settings', () => {
     expect(navItems.map((item) => item.label)).toEqual([
-      'Dashboard', 'Setup', 'Orders', 'Menu', 'Specials', 'Loyalty', 'Staff', 'Till',
+      'Dashboard', 'Setup', 'Orders', 'Menu', 'Specials', 'Loyalty', 'Customers', 'Staff', 'Till',
       'Delivery Orders', 'Inventory', 'Stocktake', 'Analytics', 'Settings',
     ]);
+  });
+});
+
+describe('Customers nav item (WhatsApp-only subscription support, 2026-10) — closes a gap for every tenant', () => {
+  it('Customers is a top-level item at /customers, deliberately ungated (no requires* flag — visible to every tenant)', () => {
+    const customers = navItems.find((item) => item.label === 'Customers')!;
+    expect(customers.to).toBe('/customers');
+    expect(customers.requiresInventory).toBeUndefined();
+    expect(customers.requiresWhatsapp).toBeUndefined();
+    expect(customers.requiresLoyalty).toBeUndefined();
+    expect(customers.requiresDeliveryAccess).toBeUndefined();
+    expect(customers.requiresPos).toBeUndefined();
+    expect(isNavItemVisible(customers, undefined)).toBe(true);
+    expect(isNavItemVisible(customers, { pos_enabled: false, is_whatsapp_enabled: false })).toBe(true);
+  });
+});
+
+describe('Till visibility — requiresPos (WhatsApp-only subscription support, 2026-10)', () => {
+  const till = navItems.find((item) => item.label === 'Till')!;
+
+  it('requiresPos is set on the Till item', () => {
+    expect(till.requiresPos).toBe(true);
+  });
+
+  it('is visible while pos_enabled is unknown (settings not loaded yet) — opposite default from every other gate', () => {
+    expect(isNavItemVisible(till, undefined)).toBe(true);
+  });
+
+  it('is visible while pos_enabled is true', () => {
+    expect(isNavItemVisible(till, { pos_enabled: true })).toBe(true);
+  });
+
+  it('is hidden only once pos_enabled is positively known to be false', () => {
+    expect(isNavItemVisible(till, { pos_enabled: false })).toBe(false);
+  });
+
+  it('a plain requiresPos item behaves the same way as Till (regression guard, independent of the real nav item)', () => {
+    const posItem: NavItem = { to: '/pos-thing', icon: navItems[0].icon, label: 'POS thing', requiresPos: true };
+    expect(isNavItemVisible(posItem, undefined)).toBe(true);
+    expect(isNavItemVisible(posItem, { pos_enabled: true })).toBe(true);
+    expect(isNavItemVisible(posItem, { pos_enabled: false })).toBe(false);
   });
 });
 

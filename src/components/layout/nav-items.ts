@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3, Bike, Boxes, ClipboardCheck, Download,
   FileUp, Gift, LayoutDashboard, MessageCircle, Receipt, Rocket,
-  Palette, Settings, ShoppingCart, Sparkles, Users, UtensilsCrossed, Wallet,
+  Palette, Settings, ShoppingCart, Sparkles, UserRound, Users, UtensilsCrossed, Wallet,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -44,6 +44,22 @@ export interface NavItem {
    */
   requiresDeliveryAccess?: boolean;
   /**
+   * WhatsApp-only subscriptions (2026-10): hidden only once we positively
+   * know the business's POS/till module is switched off
+   * (`Business.pos_enabled === false`, read via BusinessSettings.pos_enabled
+   * — see types/api.ts for the backend-contract assumption this was built
+   * against). Deliberately the OPPOSITE default-safety direction from every
+   * other `requires*` flag above: those hide while the flag is unknown
+   * (`undefined`) because an entitlement should never flash on before it's
+   * confirmed. POS is not a new entitlement being added for a subset of
+   * tenants — it is the pre-existing default for nearly every tenant today,
+   * so hiding Till while `pos_enabled` is merely unknown/not-yet-loaded (or
+   * absent from an older cached settings response) would wrongly hide a
+   * core feature for the overwhelming majority of existing POS tenants
+   * during rollout. Only an explicit `false` hides it.
+   */
+  requiresPos?: boolean;
+  /**
    * UI V2.1, A6: an expandable group (currently only "Settings") instead of
    * a standalone route. Each child is rendered as its own link when the
    * group is expanded; the parent itself is not a route.
@@ -58,8 +74,23 @@ export interface NavItem {
  * see KNOWN_BUGS.md). Add a route here once and both menus pick it up.
  *
  * UI V2.1 consolidation (A2-A6): the final top-level order is Dashboard /
- * (Setup, while incomplete) / Orders / Menu / Specials / Loyalty / Staff /
- * Till / Delivery Orders / Inventory / Stocktake / Analytics / Settings.
+ * (Setup, while incomplete) / Orders / Menu / Specials / Loyalty /
+ * Customers / Staff / Till / Delivery Orders / Inventory / Stocktake /
+ * Analytics / Settings.
+ *
+ * - Customers (WhatsApp-only subscription support, 2026-10): closes a gap
+ *   that existed for every tenant, not a POS- or WhatsApp-only-specific
+ *   feature — deliberately ungated (no `requires*` flag), placed next to
+ *   Loyalty since both are customer-relationship surfaces.
+ * - Till (same effort): gains `requiresPos`, hidden only once
+ *   `pos_enabled === false` is positively known — see that flag's own
+ *   comment above for why this is the one flag in this file that defaults
+ *   to VISIBLE rather than hidden while unknown. The `/till` route itself
+ *   stays registered in App.tsx regardless (same precedent as Billing,
+ *   removed from nav entirely in A6 but still reachable at
+ *   /settings/billing), so a WhatsApp-only tenant that later adds a
+ *   physical till can still reach it by URL even before this nav entry
+ *   reappears.
  *
  * - Inventory (A3): the 7 non-stocktake inventory pages (Stock, Ingredients,
  *   Recipes, Suppliers, Opening Stock, Variance, Wastage) are no longer
@@ -93,8 +124,9 @@ export const navItems: NavItem[] = [
   { to: '/menu', icon: UtensilsCrossed, label: 'Menu' },
   { to: '/specials', icon: Sparkles, label: 'Specials' },
   { to: '/loyalty', icon: Gift, label: 'Loyalty', requiresLoyalty: true },
+  { to: '/customers', icon: UserRound, label: 'Customers' },
   { to: '/staff', icon: Users, label: 'Staff' },
-  { to: '/till', icon: Wallet, label: 'Till' },
+  { to: '/till', icon: Wallet, label: 'Till', requiresPos: true },
   { to: '/delivery-orders', icon: Bike, label: 'Delivery Orders', requiresDeliveryAccess: true },
   { to: '/stock', icon: Boxes, label: 'Inventory', requiresInventory: true },
   { to: '/stocktake', icon: ClipboardCheck, label: 'Stocktake', requiresInventory: true },
@@ -149,12 +181,22 @@ export function isNavItemVisible(
      * OR-combined field rather than two AND-style `requires*` flags.
      */
     has_delivery_access?: boolean;
+    /**
+     * WhatsApp-only subscriptions (2026-10) — see `requiresPos`'s own
+     * comment on `NavItem` for why this flag's default-safety direction is
+     * the opposite of every other one here.
+     */
+    pos_enabled?: boolean;
   } | undefined
 ): boolean {
   if (item.requiresInventory && !ctx?.inventory_enabled) return false;
   if (item.requiresWhatsapp && !ctx?.is_whatsapp_enabled) return false;
   if (item.requiresLoyalty && !ctx?.loyalty_enabled) return false;
   if (item.requiresDeliveryAccess && !ctx?.has_delivery_access) return false;
+  // Hidden only once pos_enabled is positively known to be false — unlike
+  // every flag above, unknown/undefined (not yet loaded, or an older
+  // cached response that predates this field) stays VISIBLE here.
+  if (item.requiresPos && ctx?.pos_enabled === false) return false;
   // Shown only once we positively know setup isn't finished — hidden while
   // ready_to_trade is unknown (undefined) or already true.
   if (item.requiresSetupIncomplete && ctx?.ready_to_trade !== false) return false;
