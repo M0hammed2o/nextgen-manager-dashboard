@@ -376,6 +376,19 @@ export interface Special {
   created_at: string;
 }
 
+// Multi-page menu images (backend/app/api/v1/routes_menu_images.py,
+// migration 0058_business_menu_images). Independent of the single
+// BusinessSettings.menu_image_url field above -- a business can use
+// either or both; this is additive, not a replacement.
+export interface MenuImagePage {
+  id: string;
+  name: string;
+  sort_order: number;
+  is_active: boolean;
+  image_url: string | null;
+  asset_id: string;
+}
+
 // Staff — matches backend StaffResponse
 export interface StaffMember {
   id: string;
