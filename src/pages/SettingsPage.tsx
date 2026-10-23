@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { PageHeader, PageSkeleton } from '@/components/shared/PageComponents';
+import MenuImagesManager from '@/components/settings/MenuImagesManager';
 import { Loader2, Save } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
@@ -418,6 +419,8 @@ export default function SettingsPage() {
           </div>
         )}
       </section>
+
+      <MenuImagesManager />
 
       {/* Order & Delivery */}
       <section className="bg-card border border-border rounded-xl p-6 space-y-4">
