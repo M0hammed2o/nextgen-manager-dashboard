@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import DeliveryPlatformsPage from './DeliveryPlatformsPage';
@@ -113,6 +113,69 @@ describe('DeliveryPlatformsPage — honesty contract', () => {
     // No "Connected — live" badge anywhere for Mr D, and a link to the CSV importer instead.
     expect(screen.queryByText(/connected — live/i)).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /go to csv import/i })).toHaveAttribute('href', '/delivery-orders');
+  });
+
+  it('labels Mr D live connectivity "Pending partner approval"', async () => {
+    mockGet({
+      '/v1/business/settings': ENABLED_SETTINGS,
+      '/v1/business/delivery/connections': [
+        connection({ provider: 'UBER_EATS', status: 'NOT_CONNECTED' }),
+        connection({ provider: 'MR_D', status: 'NOT_CONNECTED' }),
+      ],
+    });
+    renderWithProviders(<DeliveryPlatformsPage />);
+    await waitFor(() => expect(screen.getByText('Pending partner approval')).toBeInTheDocument());
+  });
+
+  it('shows 24h order-flow health and flags an acceptance rate under Uber\'s 99% bar', async () => {
+    mockGet({
+      '/v1/business/settings': ENABLED_SETTINGS,
+      '/v1/business/delivery/connections': [
+        connection({ provider: 'UBER_EATS', status: 'CONNECTED', external_store_id: 'store-123' }),
+        connection({ provider: 'MR_D', status: 'NOT_CONNECTED' }),
+      ],
+      '/v1/business/delivery/health': [{
+        provider: 'UBER_EATS', provider_label: 'Uber Eats', connection_status: 'CONNECTED', environment: 'production',
+        needs_attention: false, error_reason: null, store_status: 'ONLINE', last_webhook_at: null,
+        open_orders: 1, needs_mapping: 0, ready_to_accept: 1, accept_unconfirmed: 0, provider_sync_errors: 0,
+        accepted_24h: 97, denied_24h: 3, failed_24h: 0, acceptance_rate_24h: 0.97, unmapped_menu_entries: 4,
+      }],
+    });
+    renderWithProviders(<DeliveryPlatformsPage />);
+    await waitFor(() => expect(screen.getByText('97.0%')).toBeInTheDocument());
+    expect(screen.getByText('97 of 100')).toBeInTheDocument();
+    expect(screen.getByText(/uber expects at least 99%/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '4' })).toHaveAttribute('href', '/settings/delivery/mappings');
+  });
+
+  it('pauses new Uber Eats orders on a live connection through the store-status endpoint', async () => {
+    mockGet({
+      '/v1/business/settings': ENABLED_SETTINGS,
+      '/v1/business/delivery/connections': [
+        connection({ provider: 'UBER_EATS', status: 'CONNECTED', external_store_id: 'store-123', store_status: 'ONLINE' }),
+        connection({ provider: 'MR_D', status: 'NOT_CONNECTED' }),
+      ],
+    });
+    vi.mocked(apiClient.post).mockResolvedValue({ provider: 'UBER_EATS', store_status: 'PAUSED', last_status_synced_at: null });
+    renderWithProviders(<DeliveryPlatformsPage />);
+    const button = await screen.findByRole('button', { name: /pause new orders/i });
+    fireEvent.click(button);
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith(
+      '/v1/business/delivery/connections/UBER_EATS/store-status', { status: 'PAUSED' },
+    ));
+  });
+
+  it('offers no store controls before Uber has connected the store', async () => {
+    mockGet({
+      '/v1/business/settings': ENABLED_SETTINGS,
+      '/v1/business/delivery/connections': [
+        connection({ provider: 'UBER_EATS', status: 'AWAITING_APPROVAL', external_store_id: 'store-123' }),
+        connection({ provider: 'MR_D', status: 'NOT_CONNECTED' }),
+      ],
+    });
+    renderWithProviders(<DeliveryPlatformsPage />);
+    await waitFor(() => expect(screen.getByText(/awaiting uber approval/i)).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /pause new orders/i })).not.toBeInTheDocument();
   });
 
   it('shows a distinct error state with Retry, not the empty state, on a failed fetch', async () => {

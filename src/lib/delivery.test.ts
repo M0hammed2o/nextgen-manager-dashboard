@@ -61,6 +61,14 @@ describe('getConnectionStatusMeta — honesty contract', () => {
   it('exposes the fixed Mr D card title required by the product brief', () => {
     expect(MR_D_CARD_TITLE).toBe('Mr D File Reconciliation');
   });
+
+  it('labels Mr D live connectivity "Pending partner approval" for every status until officially enabled', () => {
+    for (const status of ALL_STATUSES) {
+      const meta = getConnectionStatusMeta({ provider: 'MR_D', status });
+      expect(meta.badgeLabel).toBe('Pending partner approval');
+      expect(meta.description.toLowerCase()).toContain('pending partner approval');
+    }
+  });
 });
 
 describe('getDeadlineUrgency', () => {
