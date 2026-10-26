@@ -29,10 +29,12 @@ const STATUS_LABEL: Record<DeliveryOrderStatus, string> = {
   NEEDS_MAPPING: 'Needs mapping',
   READY_TO_ACCEPT: 'Ready to accept',
   ACCEPTED: 'Accepted',
+  ACCEPT_UNCONFIRMED: 'Accept not confirmed',
   DENIED: 'Denied',
   FULFILLED: 'Fulfilled',
   CANCELLED: 'Cancelled',
   FAILED: 'Failed',
+  UNKNOWN: 'Unknown state',
 };
 
 const STATUS_VARIANT: Record<DeliveryOrderStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -41,10 +43,12 @@ const STATUS_VARIANT: Record<DeliveryOrderStatus, 'default' | 'secondary' | 'des
   NEEDS_MAPPING: 'destructive',
   READY_TO_ACCEPT: 'secondary',
   ACCEPTED: 'default',
+  ACCEPT_UNCONFIRMED: 'destructive',
   DENIED: 'outline',
   FULFILLED: 'default',
   CANCELLED: 'outline',
   FAILED: 'destructive',
+  UNKNOWN: 'destructive',
 };
 
 // 'OPEN'/'ALL' are UI-only sentinels resolved to the real backend `status`
@@ -59,7 +63,7 @@ const FILTER_OPTIONS: { value: string; label: string }[] = [
   { value: 'FULFILLED', label: 'Fulfilled' },
   { value: 'ALL', label: 'All orders' },
 ];
-const OPEN_STATUS_FILTER = 'RECEIVED,FETCHING,NEEDS_MAPPING,READY_TO_ACCEPT';
+const OPEN_STATUS_FILTER = 'RECEIVED,FETCHING,NEEDS_MAPPING,READY_TO_ACCEPT,ACCEPT_UNCONFIRMED';
 
 /** Re-renders urgency labels periodically without a per-second re-render storm across a whole list. */
 function useTick(intervalMs: number) {
@@ -83,10 +87,21 @@ function UnresolvedItemsList({ items, provider, onMapItem }: {
       </p>
       {items.map((item, i) => (
         <div key={item.external_id ?? `${provider}-${i}`} className="flex items-center justify-between gap-2 text-sm">
-          <span className="text-foreground">{item.external_text ?? item.external_id ?? 'Unknown item'}</span>
-          <Button size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={() => onMapItem(item)}>
-            Map this item
-          </Button>
+          <span className="text-foreground">
+            {item.removed ? 'No ' : ''}{item.external_text ?? item.external_id ?? 'Unknown item'}
+            {item.kind === 'MODIFIER' && item.parent_external_text && (
+              <span className="text-muted-foreground"> — option on {item.parent_external_text}</span>
+            )}
+          </span>
+          {item.external_id ? (
+            <Button size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={() => onMapItem(item)}>
+              Map this item
+            </Button>
+          ) : (
+            // Recorded before platform ids were kept on unresolved items —
+            // there is no id to map by from here.
+            <span className="text-xs text-muted-foreground shrink-0">Import the menu to map</span>
+          )}
         </div>
       ))}
     </div>
@@ -167,13 +182,38 @@ function OrderCard({ order, onDeny }: { order: DeliveryOrderResponse; onDeny: (o
     mutationFn: () => apiClient.post<DeliveryOrderResponse>(`/v1/business/delivery/orders/${order.id}/accept`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['delivery-orders'] });
-      toast({ title: 'Order re-queued for processing' });
+      toast({ title: order.status === 'READY_TO_ACCEPT' ? 'Accepting — the order will appear in the kitchen' : 'Order re-queued for processing' });
     },
     onError: (err: Error) => toast({ title: 'Could not accept order', description: err.message, variant: 'destructive' }),
   });
 
-  const canAccept = order.status === 'NEEDS_MAPPING';
+  const retryAcceptMutation = useMutation({
+    mutationFn: () => apiClient.post<DeliveryOrderResponse>(`/v1/business/delivery/orders/${order.id}/retry-accept`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['delivery-orders'] });
+      toast({ title: 'Uber confirmed the accept' });
+    },
+    onError: (err: Error) => {
+      queryClient.invalidateQueries({ queryKey: ['delivery-orders'] });
+      toast({ title: 'Accept still not confirmed', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const markAcceptedMutation = useMutation({
+    mutationFn: () => apiClient.post<DeliveryOrderResponse>(`/v1/business/delivery/orders/${order.id}/mark-accepted`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['delivery-orders'] });
+      toast({ title: 'Marked as accepted' });
+    },
+    onError: (err: Error) => toast({ title: 'Could not mark as accepted', description: err.message, variant: 'destructive' }),
+  });
+
+  // NEEDS_MAPPING: re-try after mapping. READY_TO_ACCEPT: confirm into the
+  // kitchen (the default since auto-accept became opt-in, migration 0046).
+  const canAccept = order.status === 'NEEDS_MAPPING' || order.status === 'READY_TO_ACCEPT';
   const canDeny = ['RECEIVED', 'FETCHING', 'NEEDS_MAPPING', 'READY_TO_ACCEPT'].includes(order.status);
+  const isUnconfirmed = order.status === 'ACCEPT_UNCONFIRMED';
+  const showDeadline = order.status === 'NEEDS_MAPPING' || order.status === 'READY_TO_ACCEPT';
 
   const handleMapItem = (item: DeliveryUnresolvedItem) => {
     const params = new URLSearchParams({
@@ -181,6 +221,7 @@ function OrderCard({ order, onDeny }: { order: DeliveryOrderResponse; onDeny: (o
       external_id: item.external_id ?? '',
       external_text: item.external_text ?? '',
     });
+    if (item.kind) params.set('kind', item.kind);
     navigate(`/settings/delivery/mappings?${params.toString()}`);
   };
 
@@ -190,7 +231,7 @@ function OrderCard({ order, onDeny }: { order: DeliveryOrderResponse; onDeny: (o
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="font-medium text-foreground flex items-center gap-2">
-              {PROVIDER_LABELS[order.provider]} · {order.external_order_id}
+              {PROVIDER_LABELS[order.provider]} · {order.display_id ? `#${order.display_id}` : order.external_order_id}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
               {order.placed_at ? `Placed ${formatDateTime(order.placed_at)}` : `Received ${formatDateTime(order.created_at)}`}
@@ -200,7 +241,7 @@ function OrderCard({ order, onDeny }: { order: DeliveryOrderResponse; onDeny: (o
           <StatusBadge label={STATUS_LABEL[order.status]} variant={STATUS_VARIANT[order.status]} />
         </div>
 
-        {order.status === 'NEEDS_MAPPING' && urgency && (
+        {showDeadline && urgency && (
           <div className={`flex items-center gap-1.5 text-xs font-medium rounded-md px-2 py-1.5 ${
             urgency.isPastDeadline || urgency.isUrgent
               ? 'bg-destructive/10 text-destructive'
@@ -211,8 +252,37 @@ function OrderCard({ order, onDeny }: { order: DeliveryOrderResponse; onDeny: (o
           </div>
         )}
 
+        {order.lines && order.lines.length > 0 && (
+          <ul className="text-sm text-foreground space-y-0.5">
+            {order.lines.map((line, i) => (
+              <li key={i}>
+                {line.quantity}x {line.title}
+                {line.modifiers.length > 0 && (
+                  <span className="text-muted-foreground">
+                    {' — '}{line.modifiers.map((m) => (m.removed ? `no ${m.title}` : m.title)).join(', ')}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+
         {order.unresolved_items && order.unresolved_items.length > 0 && (
           <UnresolvedItemsList items={order.unresolved_items} provider={order.provider} onMapItem={handleMapItem} />
+        )}
+
+        {isUnconfirmed && (
+          <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>
+              This order is in your kitchen, but Uber never confirmed NextGen&apos;s accept. Check the order on the
+              Uber Eats tablet: if Uber shows it as accepted, mark it accepted; otherwise retry.
+            </span>
+          </div>
+        )}
+
+        {order.last_provider_sync_error && (
+          <p className="text-xs text-destructive">{order.last_provider_sync_error}</p>
         )}
 
         {order.status === 'DENIED' && (
@@ -225,8 +295,8 @@ function OrderCard({ order, onDeny }: { order: DeliveryOrderResponse; onDeny: (o
           <p className="text-xs text-destructive">{order.failure_reason}</p>
         )}
 
-        {(canAccept || canDeny) && (
-          <div className="flex items-center gap-2 pt-2 border-t border-border">
+        {(canAccept || canDeny || isUnconfirmed) && (
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
             {canAccept && (
               <Button
                 size="sm"
@@ -235,8 +305,29 @@ function OrderCard({ order, onDeny }: { order: DeliveryOrderResponse; onDeny: (o
                 disabled={acceptMutation.isPending}
               >
                 {acceptMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                Retry now
+                {order.status === 'READY_TO_ACCEPT' ? 'Accept into kitchen' : 'Retry now'}
               </Button>
+            )}
+            {isUnconfirmed && (
+              <>
+                <Button
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => retryAcceptMutation.mutate()}
+                  disabled={retryAcceptMutation.isPending}
+                >
+                  {retryAcceptMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                  Retry accept with Uber
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => markAcceptedMutation.mutate()}
+                  disabled={markAcceptedMutation.isPending}
+                >
+                  Uber shows it accepted
+                </Button>
+              </>
             )}
             {canDeny && (
               <Button size="sm" variant="outline" className="gap-1.5" onClick={() => onDeny(order)}>

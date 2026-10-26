@@ -4,8 +4,9 @@ import { useSearchParams } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
 import { useBusinessSettings } from '@/hooks/use-business-settings';
 import { PROVIDER_LABELS } from '@/lib/delivery';
+import { formatCents } from '@/lib/mappers';
 import type {
-  DeliveryMappingResponse, DeliveryMappingKind, DeliveryMappingStatus,
+  DeliveryCatalogueImportResponse, DeliveryMappingResponse, DeliveryMappingKind, DeliveryMappingStatus,
   DeliveryMappingUpsertRequest, DeliveryProvider, MenuItem, MenuAddOn,
 } from '@/types/api';
 import { Button } from '@/components/ui/button';
@@ -22,7 +23,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { AlertTriangle, ListChecks, Plus, Truck } from 'lucide-react';
+import { AlertTriangle, Download, ListChecks, Loader2, Plus, Truck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const KIND_OPTIONS: { value: DeliveryMappingKind; label: string }[] = [
@@ -248,6 +249,28 @@ export default function DeliveryMappingsPage() {
     open: false, initial: emptyForm(),
   });
 
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  // Reads (never writes) the Uber Eats menu so every item can be mapped
+  // BEFORE go-live, instead of one auto-declined order at a time.
+  const importMutation = useMutation({
+    mutationFn: () =>
+      apiClient.post<DeliveryCatalogueImportResponse>('/v1/business/delivery/menu-mappings/import', { provider: 'UBER_EATS' }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['delivery-menu-mappings'] });
+      const parts = [
+        `${res.fetched} items read`,
+        `${res.created} new`,
+        `${res.auto_mapped} matched by exact name`,
+      ];
+      if (res.adopted_from_csv) parts.push(`${res.adopted_from_csv} linked to existing CSV mappings`);
+      if (res.renamed) parts.push(`${res.renamed} renamed on Uber — please re-check`);
+      if (res.name_collisions) parts.push(`${res.name_collisions} share a name with another item — map by hand`);
+      toast({ title: 'Uber Eats menu imported', description: parts.join(' · ') });
+    },
+    onError: (err: Error) => toast({ title: 'Could not import the Uber Eats menu', description: err.message, variant: 'destructive' }),
+  });
+
   // Deep link from the Orders page's "Map this item" button
   // (?platform=...&external_id=...&external_text=...) — auto-opens the
   // dialog pre-filled so a manager can close the NEEDS_MAPPING loop without
@@ -262,6 +285,9 @@ export default function DeliveryMappingsPage() {
           platform: platform as DeliveryProvider,
           external_id: externalId,
           external_text: searchParams.get('external_text') ?? '',
+          // An unresolved modifier deep-links with kind=MODIFIER so the
+          // dialog opens on the right target type.
+          ...(searchParams.get('kind') === 'MODIFIER' ? { kind: 'MODIFIER' as DeliveryMappingKind } : {}),
         }),
       });
       setSearchParams({}, { replace: true });
@@ -308,9 +334,20 @@ export default function DeliveryMappingsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <PageHeader title="Menu Mapping" description="Point each provider item/modifier at what it means on your NextGen menu. An order containing an unmapped item cannot be processed and will be auto-declined at the provider's deadline." />
-        <Button className="gap-1.5" onClick={() => setDialogState({ open: true, initial: emptyForm() })}>
-          <Plus className="w-4 h-4" /> Add mapping
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            className="gap-1.5"
+            onClick={() => importMutation.mutate()}
+            disabled={importMutation.isPending}
+          >
+            {importMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            Import Uber Eats menu
+          </Button>
+          <Button className="gap-1.5" onClick={() => setDialogState({ open: true, initial: emptyForm() })}>
+            <Plus className="w-4 h-4" /> Add mapping
+          </Button>
+        </div>
       </div>
       <DeliverySubNav />
 
@@ -325,7 +362,7 @@ export default function DeliveryMappingsPage() {
         <EmptyState
           icon={<ListChecks className="w-10 h-10" />}
           title="No mappings yet"
-          description="Mappings are created automatically as unmapped items are found in orders, or you can add one manually."
+          description="Import your Uber Eats menu to list every item at once, or add a mapping manually."
           action={<Button className="gap-1.5" onClick={() => setDialogState({ open: true, initial: emptyForm() })}><Plus className="w-4 h-4" /> Add mapping</Button>}
         />
       ) : (
@@ -348,9 +385,25 @@ export default function DeliveryMappingsPage() {
                   <TableCell className="text-xs text-muted-foreground">{m.kind}</TableCell>
                   <TableCell>
                     <p className="font-medium text-foreground">{m.external_text}</p>
+                    {m.provider_group_title && (
+                      <p className="text-xs text-muted-foreground">in “{m.provider_group_title}”</p>
+                    )}
                     <p className="text-xs text-muted-foreground font-mono">{m.external_id}</p>
+                    {m.provider_price_cents != null && (
+                      <p className="text-xs text-muted-foreground">
+                        {PROVIDER_LABELS[m.platform]} price {formatCents(m.provider_price_cents)}
+                        {m.menu_price_cents != null && m.menu_price_cents !== m.provider_price_cents && (
+                          <> · your menu {formatCents(m.menu_price_cents)}</>
+                        )}
+                      </p>
+                    )}
                   </TableCell>
-                  <TableCell><StatusBadge label={STATUS_LABEL[m.status]} variant={STATUS_VARIANT[m.status]} /></TableCell>
+                  <TableCell>
+                    <StatusBadge label={STATUS_LABEL[m.status]} variant={STATUS_VARIANT[m.status]} />
+                    {m.status_reason && m.status !== 'MAPPED' && (
+                      <p className="mt-1 text-xs text-muted-foreground max-w-xs">{m.status_reason}</p>
+                    )}
+                  </TableCell>
                   <TableCell className="text-sm">
                     {m.menu_item_name ?? m.menu_add_on_name ?? (m.is_ignored ? "Doesn't affect stock" : '—')}
                   </TableCell>
