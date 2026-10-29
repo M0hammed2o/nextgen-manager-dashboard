@@ -783,6 +783,13 @@ export interface CustomerLoyalty {
 export interface LoyaltyRedeemRequest {
   customer_id: string;
   reward_id: string;
+  /**
+   * Required (BUG-0186) — a retried/double-clicked request with the SAME
+   * key replays the original outcome instead of deducting points twice; a
+   * genuinely new redemption must use a new key. See
+   * routes_loyalty.py RedeemRequest / LoyaltyPage.tsx's redeemMutation.
+   */
+  idempotency_key: string;
 }
 
 /**

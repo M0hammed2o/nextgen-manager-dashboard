@@ -619,6 +619,14 @@ function CustomerLookupCard({ role }: { role: string }) {
   const [customer, setCustomer] = useState<CustomerLoyalty | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [selectedRewardId, setSelectedRewardId] = useState('');
+  // BUG-0186: generated lazily on the first redeem attempt for the current
+  // reward selection, reused across any retry of that SAME attempt, and
+  // cleared on success or whenever the selection changes — so a retry
+  // replays the original outcome instead of deducting points twice, while
+  // picking a different reward (or redeeming again after success) is a
+  // genuinely new request with a new key. Same pattern as
+  // PointsAdjustmentDialog's idempotencyKeyRef above.
+  const redeemIdempotencyKeyRef = useRef<string | null>(null);
 
   const { data: rewards } = useQuery({
     queryKey: ['loyalty-rewards'],
@@ -639,11 +647,16 @@ function CustomerLookupCard({ role }: { role: string }) {
   });
 
   const redeemMutation = useMutation({
-    mutationFn: (rewardId: string) =>
-      apiClient.post<LoyaltyRedeemResponse>('/v1/business/loyalty/redeem', {
+    mutationFn: (rewardId: string) => {
+      if (!redeemIdempotencyKeyRef.current) {
+        redeemIdempotencyKeyRef.current = crypto.randomUUID();
+      }
+      return apiClient.post<LoyaltyRedeemResponse>('/v1/business/loyalty/redeem', {
         customer_id: customer?.customer_id,
         reward_id: rewardId,
-      }),
+        idempotency_key: redeemIdempotencyKeyRef.current,
+      });
+    },
     onSuccess: (res) => {
       setCustomer((prev) => (prev ? { ...prev, loyalty_points_balance: res.balance_after } : prev));
       toast({
@@ -651,6 +664,7 @@ function CustomerLookupCard({ role }: { role: string }) {
         description: `Recorded a redemption of ${Math.abs(res.points_delta)} points. New balance: ${res.balance_after} points.`,
       });
       setSelectedRewardId('');
+      redeemIdempotencyKeyRef.current = null;
     },
     onError: (err: Error) => toast({ title: 'Could not record redemption', description: err.message, variant: 'destructive' }),
   });
@@ -710,7 +724,11 @@ function CustomerLookupCard({ role }: { role: string }) {
                 <div className="flex gap-2">
                   <select
                     value={selectedRewardId}
-                    onChange={(e) => setSelectedRewardId(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedRewardId(e.target.value);
+                      // A different reward is a different intent, not a retry.
+                      redeemIdempotencyKeyRef.current = null;
+                    }}
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <option value="">Select a reward…</option>

@@ -160,9 +160,66 @@ describe('LoyaltyPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /record redemption/i }));
 
     await waitFor(() =>
-      expect(apiClient.post).toHaveBeenCalledWith('/v1/business/loyalty/redeem', { customer_id: 'c1', reward_id: 'r1' })
+      expect(apiClient.post).toHaveBeenCalledWith('/v1/business/loyalty/redeem', {
+        customer_id: 'c1',
+        reward_id: 'r1',
+        idempotency_key: expect.any(String),
+      })
     );
     await waitFor(() => expect(screen.getByText('150 pts')).toBeInTheDocument());
+  });
+
+  it('BUG-0186: a retried redemption reuses the same idempotency_key; a new reward selection uses a new one', async () => {
+    mockGet({
+      '/v1/business/loyalty/program': ENABLED_PROGRAM,
+      '/v1/business/loyalty/rewards': REWARDS,
+    });
+    vi.mocked(apiClient.get).mockImplementation((path: string) => {
+      if (path === '/v1/business/loyalty/program') return Promise.resolve(ENABLED_PROGRAM);
+      if (path === '/v1/business/loyalty/rewards') return Promise.resolve(REWARDS);
+      if (path.startsWith('/v1/business/loyalty/customers/lookup')) return Promise.resolve(CUSTOMER);
+      return Promise.reject(new Error(`unexpected GET ${path}`));
+    });
+    // First attempt fails (simulating a network blip the user retries after).
+    vi.mocked(apiClient.post)
+      .mockRejectedValueOnce(new Error('network error'))
+      .mockResolvedValueOnce({ success: true, points_delta: -100, balance_after: 150 });
+
+    renderWithClient(<LoyaltyPage />);
+
+    const phoneInput = await screen.findByPlaceholderText(/27821234567/i);
+    fireEvent.change(phoneInput, { target: { value: '27821234567' } });
+    fireEvent.click(screen.getByRole('button', { name: /look up/i }));
+    await waitFor(() => expect(screen.getByText('Jane Doe')).toBeInTheDocument());
+
+    const select = screen.getByDisplayValue(/select a reward/i);
+    fireEvent.change(select, { target: { value: 'r1' } });
+    fireEvent.click(screen.getByRole('button', { name: /record redemption/i }));
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledTimes(1));
+
+    // Retry the SAME intended redemption (same reward still selected) — must
+    // reuse the exact same key as the failed first attempt, not generate a
+    // new one.
+    fireEvent.click(screen.getByRole('button', { name: /record redemption/i }));
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledTimes(2));
+
+    const [, firstBody] = vi.mocked(apiClient.post).mock.calls[0] as [string, { idempotency_key: string }];
+    const [, retryBody] = vi.mocked(apiClient.post).mock.calls[1] as [string, { idempotency_key: string }];
+    const firstKey = firstBody.idempotency_key;
+    const retryKey = retryBody.idempotency_key;
+    expect(retryKey).toBe(firstKey);
+
+    await waitFor(() => expect(screen.getByText('150 pts')).toBeInTheDocument());
+
+    // A genuinely NEW redemption (reward re-selected after success) must get a NEW key.
+    vi.mocked(apiClient.post).mockResolvedValueOnce({ success: true, points_delta: -50, balance_after: 100 });
+    fireEvent.change(select, { target: { value: 'r1' } });
+    fireEvent.click(screen.getByRole('button', { name: /record redemption/i }));
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledTimes(3));
+
+    const [, secondBody] = vi.mocked(apiClient.post).mock.calls[2] as [string, { idempotency_key: string }];
+    const secondRedemptionKey = secondBody.idempotency_key;
+    expect(secondRedemptionKey).not.toBe(firstKey);
   });
 
   // Loyalty entitlement (migration 0051, Business.loyalty_enabled,
