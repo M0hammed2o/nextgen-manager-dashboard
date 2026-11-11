@@ -1,3 +1,4 @@
+import type React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { AuthProvider, useAuth } from './auth';
@@ -114,5 +115,25 @@ describe('AuthProvider — login/logout storage behavior', () => {
     expect(sessionStorage.getItem('access_token')).toBeNull();
     expect(sessionStorage.getItem('refresh_token')).toBeNull();
     expect(sessionStorage.getItem('auth_user')).toBeNull();
+  });
+
+  it('drops every cached query on logout and on login, so another restaurant never sees the previous restaurant data', async () => {
+    const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+    const client = new QueryClient();
+    client.setQueryData(['settings'], { business_name: 'Restaurant A' });
+    vi.mocked(apiClient.post).mockResolvedValue(FAKE_LOGIN_RESPONSE);
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={client}><AuthProvider>{children}</AuthProvider></QueryClientProvider>
+    );
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await act(async () => { await result.current.logout(); });
+    expect(client.getQueryData(['settings'])).toBeUndefined();
+
+    client.setQueryData(['settings'], { business_name: 'Restaurant A' });
+    await act(async () => {
+      await result.current.login({ email: 'owner@example.com', password: 'whatever' });
+    });
+    expect(client.getQueryData(['settings'])).toBeUndefined();
   });
 });
