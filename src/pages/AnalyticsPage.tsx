@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SalesWalletsSection } from '@/components/analytics/SalesWalletsSection';
+import { BestSellersSection } from '@/components/analytics/BestSellersSection';
 import { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 
@@ -38,7 +39,6 @@ function formatPaymentMethod(method: string): string {
 export default function AnalyticsPage() {
   const [period, setPeriod] = useState<Period>('7d');
   const days = periodToDays(period);
-  const { data: settings, isLoading: settingsLoading } = useBusinessSettings();
 
   // Core Analytics — available on every plan, including POS-only tenants
   // (see nav-items.ts). Summary uses ?period= (today|7d|30d).
@@ -105,13 +105,11 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* Sales Wallets: sales by channel (reporting only, not money held).
-          Has its own date filter, independent of the period buttons above. */}
-      {settingsLoading ? (
-        <Skeleton className="h-40 w-full" />
-      ) : (
-        <SalesWalletsSection entitled={isAdvancedAnalyticsEntitled(settings)} />
-      )}
+      {/* Sales Wallets and Best sellers: available on every plan (no Advanced
+          Analytics gate). Each has its own date filter, independent of the
+          period buttons above. */}
+      <SalesWalletsSection />
+      <BestSellersSection />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total Orders" value={summary.totalOrders} icon={<ShoppingCart className="w-5 h-5" />} />

@@ -13,11 +13,11 @@ vi.mock('@/lib/api-client', async () => {
   };
 });
 
-function renderSection(entitled = true) {
+function renderSection() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <SalesWalletsSection entitled={entitled} />
+      <SalesWalletsSection />
     </QueryClientProvider>,
   );
 }
@@ -207,21 +207,25 @@ describe('SalesWalletsSection', () => {
     await waitFor(() => expect(paths().some((p) => p.includes('/sales-wallets/TOTAL/orders?'))).toBe(true));
   });
 
-  it('shows the existing locked state (and never calls the endpoint) for a non-entitled tenant', () => {
+  it('renders the cards with no entitlement or settings lookup at all (every plan)', async () => {
     mockApi();
-    renderSection(false);
-    expect(screen.getByText(/aren't available on your plan/i)).toBeInTheDocument();
-    expect(paths()).toHaveLength(0);
+    renderSection();
+    await waitFor(() => expect(screen.getByText('Mr D Food')).toBeInTheDocument());
+    expect(screen.queryByText(/aren't available on your plan/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Not enabled')).not.toBeInTheDocument();
+    expect(paths().some((p) => p.includes('/business/settings'))).toBe(false);
+    expect(paths()).toContain('/v1/business/analytics/sales-wallets?range=today');
   });
 
-  it('shows the existing "Not enabled" upsell state when the API answers 409 ADVANCED_ANALYTICS_NOT_ENABLED', async () => {
-    mockApi({
-      report: new ApiError('Advanced Analytics is not enabled for this business', 409, 'ADVANCED_ANALYTICS_NOT_ENABLED'),
-    });
+  it('shows the headline as NET with gross, refunds and order count underneath, and payment status in the breakdown', async () => {
+    mockApi();
     renderSection();
-    await waitFor(() => expect(screen.getByText('Not enabled')).toBeInTheDocument());
-    expect(screen.getByText(/advanced analytics isn't enabled for your account/i)).toBeInTheDocument();
-    expect(screen.queryByText('Mr D Food')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Mr D Food')).toBeInTheDocument());
+    const card = screen.getByRole('button', { name: /open mr d food breakdown/i });
+    expect(card.textContent).toMatch(/Net sales/);
+    fireEvent.click(card);
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() => expect(within(dialog).getByText('Payment status')).toBeInTheDocument());
   });
 
   it("shows the API's message on a 422 instead of cards", async () => {

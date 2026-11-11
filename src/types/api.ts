@@ -1133,8 +1133,8 @@ export interface DeliveryMappingUpsertRequest {
 
 // ── Sales Wallets (reporting views by sales channel — NOT stored money) ─────
 // GET /v1/business/analytics/sales-wallets and
-// GET /v1/business/analytics/sales-wallets/{wallet}/orders. Gated by
-// Advanced Analytics (409 ADVANCED_ANALYTICS_NOT_ENABLED), owner/manager only.
+// GET /v1/business/analytics/sales-wallets/{wallet}/orders. Owner/manager only,
+// available on every plan (no Advanced Analytics gate).
 export type SalesWalletRange = 'today' | 'yesterday' | '7d' | 'month' | 'custom';
 export type SalesWalletKey = 'MR_D' | 'UBER_EATS' | 'GENERAL' | 'TOTAL';
 
@@ -1211,4 +1211,86 @@ export interface SalesWalletOrdersResponse {
   summary: SalesWallet;
   by_source: SalesWalletSourceBreakdown[];
   orders: SalesWalletOrder[];
+}
+
+// ── Best-selling products (top 3 per sales channel) ─────────────────────────
+// GET /v1/business/analytics/best-sellers and
+// GET /v1/business/analytics/products/{menu_item_id}/performance.
+// Owner/manager only, every plan. Reporting only.
+export type BestSellerRankBy = 'quantity' | 'revenue';
+export type BestSellerChannelKey = 'UBER_EATS' | 'MR_D' | 'GENERAL' | 'ALL';
+
+export interface BestSellerRow {
+  rank: 1 | 2 | 3;
+  menu_item_id: string;
+  name: string;
+  image_url: string | null;
+  is_deleted: boolean;
+  quantity: number;
+  gross_cents: number;
+  /** null = a partial refund on an order cannot be attributed to one product. */
+  refund_adjusted_cents: number | null;
+  has_unattributed_refund: boolean;
+  quantity_share_pct: number | null;
+  revenue_share_pct: number | null;
+}
+
+export interface BestSellerChannel {
+  key: BestSellerChannelKey;
+  label: string;
+  product_count: number;
+  total_quantity: number;
+  total_item_gross_cents: number;
+  ranking: BestSellerRow[];
+  unmapped: { quantity: number; gross_cents: number; names: string[] };
+  unattributed_refunds: { order_count: number; refunds_cents: number };
+  awaiting_mapping_orders: number;
+}
+
+export interface BestSellersReport {
+  range: SalesWalletRange;
+  start_date: string;
+  end_date: string;
+  timezone: string;
+  currency: string;
+  rank_by: BestSellerRankBy;
+  share_basis: string;
+  refund_basis: string;
+  channels: BestSellerChannel[];
+}
+
+export interface ProductChannelPerformance {
+  key: 'UBER_EATS' | 'MR_D' | 'GENERAL';
+  label: string;
+  quantity: number;
+  gross_cents: number;
+  quantity_share_pct: number | null;
+  revenue_share_pct: number | null;
+}
+
+export interface ProductDailyPoint {
+  quantity: number;
+  gross_cents: number;
+}
+
+export interface ProductPerformance {
+  range: SalesWalletRange;
+  start_date: string;
+  end_date: string;
+  timezone: string;
+  currency: string;
+  menu_item_id: string;
+  name: string;
+  image_url: string | null;
+  is_deleted: boolean;
+  total_quantity: number;
+  total_gross_cents: number;
+  channels: ProductChannelPerformance[];
+  variants: { label: string; quantity: number; gross_cents: number }[];
+  daily: {
+    day: string;
+    uber_eats: ProductDailyPoint;
+    mr_d: ProductDailyPoint;
+    general: ProductDailyPoint;
+  }[];
 }

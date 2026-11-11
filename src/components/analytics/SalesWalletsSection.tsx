@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { Lock, Store, Bike, ShoppingBag, Sigma } from 'lucide-react';
+import { Store, Bike, ShoppingBag, Sigma } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { formatCents } from '@/lib/mappers';
-import { isAdvancedAnalyticsNotEnabledError } from '@/lib/entitlements';
 import type {
   SalesWallet, SalesWalletAvailability, SalesWalletKey, SalesWalletOrdersResponse,
   SalesWalletRange, SalesWalletsReport, SalesWalletTotals,
@@ -11,23 +10,14 @@ import type {
 import { StatCard, EmptyState, ErrorState } from '@/components/shared/PageComponents';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { DateRangeControl, buildQuery, useDateRange } from '@/components/analytics/DateRangeControl';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 // Sales Wallets are REPORTING views of sales by channel. They are not stored
 // money: no balance, no withdrawal, no payout. The backend scopes everything
 // by the JWT, so no business id is ever sent from here.
-
-const RANGES: { value: SalesWalletRange; label: string }[] = [
-  { value: 'today', label: 'Today' },
-  { value: 'yesterday', label: 'Yesterday' },
-  { value: '7d', label: 'Last 7 days' },
-  { value: 'month', label: 'This month' },
-  { value: 'custom', label: 'Custom' },
-];
 
 const PAGE_SIZE = 25;
 
@@ -55,16 +45,6 @@ function formatSaleTime(iso: string, timeZone: string): string {
       return '—';
     }
   }
-}
-
-function buildQuery(range: SalesWalletRange, start: string, end: string, extra: Record<string, string | number> = {}) {
-  const params = new URLSearchParams({ range });
-  if (range === 'custom') {
-    params.set('start', start);
-    params.set('end', end);
-  }
-  for (const [k, v] of Object.entries(extra)) params.set(k, String(v));
-  return params.toString();
 }
 
 /** Muted note for fees/settlement. Renders nothing for null (not applicable). Never renders a number when unavailable. */
@@ -150,12 +130,6 @@ function WalletBreakdownSheet({
         <div className="mt-4 space-y-6">
           {isLoading ? (
             <Skeleton className="h-48 w-full" />
-          ) : isAdvancedAnalyticsNotEnabledError(error) ? (
-            <EmptyState
-              icon={<Lock className="w-8 h-8" />}
-              title="Not enabled"
-              description="Advanced Analytics isn't enabled for your account."
-            />
           ) : isError || !data || !summary ? (
             <ErrorState
               message={(error as Error | null)?.message ?? "Couldn't load this breakdown."}
@@ -276,21 +250,19 @@ function WalletBreakdownSheet({
   );
 }
 
-export function SalesWalletsSection({ entitled }: { entitled: boolean }) {
-  const [range, setRange] = useState<SalesWalletRange>('today');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
+export function SalesWalletsSection() {
+  const dateRange = useDateRange('today');
+  const { range, customReady, customOrderInvalid } = dateRange;
+  const customStart = dateRange.start;
+  const customEnd = dateRange.end;
   const [openWallet, setOpenWallet] = useState<{ key: SalesWalletKey; label: string } | null>(null);
-
-  const customReady = range !== 'custom' || (customStart !== '' && customEnd !== '' && customStart <= customEnd);
-  const customOrderInvalid = range === 'custom' && customStart !== '' && customEnd !== '' && customStart > customEnd;
 
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: ['sales-wallets', range, range === 'custom' ? customStart : null, range === 'custom' ? customEnd : null],
     queryFn: () => apiClient.get<SalesWalletsReport>(
       `/v1/business/analytics/sales-wallets?${buildQuery(range, customStart, customEnd)}`,
     ),
-    enabled: entitled && customReady,
+    enabled: customReady,
   });
 
   return (
@@ -300,72 +272,34 @@ export function SalesWalletsSection({ entitled }: { entitled: boolean }) {
         <p className="text-sm text-muted-foreground">Sales by channel. Reporting only, not money held.</p>
       </div>
 
-      {!entitled ? (
-        <div className="bg-card border border-border rounded-xl p-6">
-          <EmptyState
-            icon={<Lock className="w-10 h-10" />}
-            title="Sales Wallets aren't available on your plan"
-            description="Sales by channel (Mr D Food, Uber Eats and direct sales) is part of the NextGen Complete plan. Contact NextGen to add this module."
-          />
+      <DateRangeControl state={dateRange} idPrefix="sales-wallets" />
+
+      {!customReady ? (
+        <p className="text-sm text-muted-foreground">
+          {customOrderInvalid ? 'The end date must be on or after the start date.' : 'Choose a start and end date to see sales.'}
+        </p>
+      ) : isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-28 w-full" />)}
         </div>
+      ) : isError || !data ? (
+        <ErrorState
+          message={(error as Error | null)?.message ?? "Couldn't load sales by channel."}
+          onRetry={() => refetch()}
+          isRetrying={isFetching}
+        />
       ) : (
         <>
-          <div className="flex flex-wrap items-end gap-2">
-            {RANGES.map((r) => (
-              <Button key={r.value} variant={range === r.value ? 'default' : 'outline'} size="sm" onClick={() => setRange(r.value)}>
-                {r.label}
-              </Button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {data.wallets.map((w) => (
+              <WalletCard key={w.key} wallet={w} onOpen={() => setOpenWallet({ key: w.key as SalesWalletKey, label: w.label })} />
             ))}
-            {range === 'custom' && (
-              <div className="flex flex-wrap items-end gap-2">
-                <div className="space-y-1">
-                  <Label htmlFor="sales-wallets-start" className="text-xs">Start date</Label>
-                  <Input id="sales-wallets-start" type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="sales-wallets-end" className="text-xs">End date</Label>
-                  <Input id="sales-wallets-end" type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} />
-                </div>
-              </div>
-            )}
+            {/* Total is the API's own figure, never recomputed from the cards. */}
+            <WalletCard wallet={data.total} onOpen={() => setOpenWallet({ key: 'TOTAL', label: data.total.label })} />
           </div>
-
-          {!customReady ? (
-            <p className="text-sm text-muted-foreground">
-              {customOrderInvalid ? 'The end date must be on or after the start date.' : 'Choose a start and end date to see sales.'}
-            </p>
-          ) : isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-28 w-full" />)}
-            </div>
-          ) : isAdvancedAnalyticsNotEnabledError(error) ? (
-            <div className="bg-card border border-border rounded-xl p-6">
-              <EmptyState
-                icon={<Lock className="w-8 h-8" />}
-                title="Not enabled"
-                description="Advanced Analytics isn't enabled for your account."
-              />
-            </div>
-          ) : isError || !data ? (
-            <ErrorState
-              message={(error as Error | null)?.message ?? "Couldn't load sales by channel."}
-              onRetry={() => refetch()}
-              isRetrying={isFetching}
-            />
-          ) : (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {data.wallets.map((w) => (
-                  <WalletCard key={w.key} wallet={w} onOpen={() => setOpenWallet({ key: w.key as SalesWalletKey, label: w.label })} />
-                ))}
-                {/* Total is the API's own figure, never recomputed from the cards. */}
-                <WalletCard wallet={data.total} onOpen={() => setOpenWallet({ key: 'TOTAL', label: data.total.label })} />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {data.start_date} to {data.end_date} ({data.timezone}). Click a card for the order breakdown.
-              </p>
-            </>
-          )}
+          <p className="text-xs text-muted-foreground">
+            {data.start_date} to {data.end_date} ({data.timezone}). Click a card for the order breakdown.
+          </p>
         </>
       )}
 

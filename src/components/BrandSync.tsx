@@ -15,8 +15,22 @@ import { useEffect } from 'react';
 
 import { useBusinessSettings } from '@/hooks/use-business-settings';
 import { useBrand } from '@/lib/brand-provider';
+import { useAuth } from '@/lib/auth';
 
+/**
+ * BrandSync is mounted in App.tsx ABOVE the router, so it is alive on /login
+ * before anyone has signed in. It must therefore not touch the settings query
+ * until a session exists (BUG-0193): the unauthenticated request got a 401
+ * that was cached under the shared ['settings'] key, and the cards that read
+ * the same key after login (Analytics, Sales Wallets, ...) inherited that
+ * failed/in-flight state instead of fetching with the new token.
+ */
 export function BrandSync() {
+  const { isAuthenticated } = useAuth();
+  return isAuthenticated ? <BrandSyncInner /> : null;
+}
+
+function BrandSyncInner() {
   const { data: settings } = useBusinessSettings();
   const brand = useBrand();
 
