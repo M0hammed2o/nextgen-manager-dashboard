@@ -130,4 +130,39 @@ describe('AnalyticsPage', () => {
 
     await waitFor(() => expect(screen.getAllByText(/not enabled/i).length).toBeGreaterThan(0));
   });
+  it('puts Sales Wallets at the top of the page for an entitled tenant', async () => {
+    mockGet({
+      '/v1/business/analytics/summary': SUMMARY,
+      '/v1/business/analytics/top-items': [],
+      '/v1/business/analytics/daily': [],
+      '/v1/business/settings': ENTITLED_SETTINGS,
+      '/v1/business/analytics/sales-wallets': {
+        range: 'today', start_date: '2026-11-11', end_date: '2026-11-11', timezone: 'Africa/Johannesburg', currency: 'ZAR',
+        wallets: [], total: {
+          key: 'TOTAL', label: 'Total Sales', order_count: 0, gross_cents: 0, refunds_cents: 0, net_cents: 0,
+          vat_cents: 0, voided_count: 0, voided_cents: 0, payment_status_counts: {},
+        },
+      },
+    });
+    renderWithClient(<AnalyticsPage />);
+
+    await waitFor(() => expect(screen.getByText('Total Sales')).toBeInTheDocument());
+    const heading = screen.getByRole('heading', { name: 'Sales Wallets' });
+    const orders = screen.getByText('Total Orders');
+    expect(heading.compareDocumentPosition(orders) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('does not call the Sales Wallets endpoint for a non-entitled tenant', async () => {
+    mockGet({
+      '/v1/business/analytics/summary': SUMMARY,
+      '/v1/business/analytics/top-items': [],
+      '/v1/business/analytics/daily': [],
+      '/v1/business/settings': NOT_ENTITLED_SETTINGS,
+    });
+    renderWithClient(<AnalyticsPage />);
+
+    await waitFor(() => expect(screen.getByText(/aren't available on your plan/i)).toBeInTheDocument());
+    const calledPaths = vi.mocked(apiClient.get).mock.calls.map((c) => c[0]);
+    expect(calledPaths.some((p) => p.includes('sales-wallets'))).toBe(false);
+  });
 });

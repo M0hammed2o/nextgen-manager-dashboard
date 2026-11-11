@@ -1130,3 +1130,85 @@ export interface DeliveryMappingUpsertRequest {
   removable_ref_id?: string | null;
   is_ignored?: boolean;
 }
+
+// ── Sales Wallets (reporting views by sales channel — NOT stored money) ─────
+// GET /v1/business/analytics/sales-wallets and
+// GET /v1/business/analytics/sales-wallets/{wallet}/orders. Gated by
+// Advanced Analytics (409 ADVANCED_ANALYTICS_NOT_ENABLED), owner/manager only.
+export type SalesWalletRange = 'today' | 'yesterday' | '7d' | 'month' | 'custom';
+export type SalesWalletKey = 'MR_D' | 'UBER_EATS' | 'GENERAL' | 'TOTAL';
+
+/** `available: false` carries a `reason`; the UI must never show a number for it. */
+export interface SalesWalletAvailability {
+  available: boolean;
+  reason?: string | null;
+}
+
+export interface SalesWalletTotals {
+  key: string;
+  label: string;
+  order_count: number;
+  gross_cents: number;
+  refunds_cents: number;
+  net_cents: number;
+  vat_cents: number;
+  voided_count: number;
+  voided_cents: number;
+  payment_status_counts: Record<string, number>;
+}
+
+export interface SalesWallet extends SalesWalletTotals {
+  sources?: string[];
+  /** null = not applicable (General Sales). */
+  platform_fees?: SalesWalletAvailability | null;
+  settlement?: SalesWalletAvailability | null;
+}
+
+export interface SalesWalletsReport {
+  range: SalesWalletRange;
+  start_date: string;
+  end_date: string;
+  timezone: string;
+  currency: string;
+  wallets: SalesWallet[];
+  total: SalesWalletTotals;
+}
+
+export interface SalesWalletSourceBreakdown {
+  source: string;
+  label: string;
+  order_count: number;
+  gross_cents: number;
+  refunds_cents: number;
+  net_cents: number;
+}
+
+export interface SalesWalletOrder {
+  id: string;
+  order_number: string;
+  source: string;
+  source_label: string;
+  sale_at: string;
+  status: string;
+  payment_status: string;
+  payment_method: string | null;
+  gross_cents: number;
+  refund_cents: number;
+  net_cents: number;
+  external_order_id: string | null;
+}
+
+export interface SalesWalletOrdersResponse {
+  wallet: SalesWalletKey;
+  label: string;
+  start_date: string;
+  end_date: string;
+  timezone: string;
+  currency: string;
+  page: number;
+  page_size: number;
+  total_count: number;
+  summary: SalesWallet;
+  by_source: SalesWalletSourceBreakdown[];
+  orders: SalesWalletOrder[];
+}
