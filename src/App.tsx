@@ -38,6 +38,10 @@ import DeliveryPlatformsPage from '@/pages/DeliveryPlatformsPage';
 import DeliveryOrdersPage from '@/pages/DeliveryOrdersPage';
 import DeliveryMappingsPage from '@/pages/DeliveryMappingsPage';
 import ExportsPage from "./pages/ExportsPage";
+import EventRegisterPage from '@/pages/EventRegisterPage';
+import EventHomePage from '@/pages/EventHomePage';
+import EventDaysPage from '@/pages/EventDaysPage';
+import { RootRoute } from '@/components/RootRoute';
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -64,8 +68,11 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/events/:slug/register" element={<EventRegisterPage />} />
               <Route element={<DashboardLayout />}>
-                <Route path="/" element={<DashboardPage />} />
+                <Route path="/" element={<RootRoute />} />
+                <Route path="/event" element={<EventHomePage />} />
+                <Route path="/event/days" element={<EventDaysPage />} />
                 <Route path="/orders" element={<OrdersPage />} />
                 <Route path="/customers" element={<CustomersPage />} />
                 <Route path="/menu" element={<MenuPage />} />

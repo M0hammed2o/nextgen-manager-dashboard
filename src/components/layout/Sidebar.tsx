@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useBusinessSettings } from '@/hooks/use-business-settings';
 import { useSetupProgress } from '@/hooks/use-setup-progress';
+import { useEventAccess } from '@/hooks/use-event-access';
 import { navItems, isNavItemVisible, visibleChildren, hasDeliveryAccess } from './nav-items';
 import logoNextgen from '@/assets/logo-nextgen.jpeg';
 
@@ -13,6 +14,7 @@ export function Sidebar() {
   const location = useLocation();
   const { data: settings } = useBusinessSettings();
   const { data: setup } = useSetupProgress();
+  const { data: eventAccess } = useEventAccess();
 
   // Merged visibility context (UI V2.1, A5/A6) — nav-items.ts's gates read
   // from both the business's module entitlements and its setup-completion
@@ -25,6 +27,7 @@ export function Sidebar() {
     ready_to_trade: setup?.ready_to_trade,
     has_delivery_access: hasDeliveryAccess(settings),
     pos_enabled: settings?.pos_enabled,
+    is_event_vendor: eventAccess?.is_event_vendor,
   };
 
   const visibleItems = navItems.filter((item) => isNavItemVisible(item, ctx));

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useBusinessSettings } from '@/hooks/use-business-settings';
 import { useSetupProgress } from '@/hooks/use-setup-progress';
+import { useEventAccess } from '@/hooks/use-event-access';
 import { navItems, isNavItemVisible, visibleChildren, hasDeliveryAccess } from './nav-items';
 import logoNextgen from '@/assets/logo-nextgen.jpeg';
 
@@ -17,6 +18,7 @@ export function MobileSidebar({ open, onClose }: Props) {
   const location = useLocation();
   const { data: settings } = useBusinessSettings();
   const { data: setup } = useSetupProgress();
+  const { data: eventAccess } = useEventAccess();
 
   // Same merged gating context as Sidebar.tsx (desktop) — see nav-items.ts's
   // isNavItemVisible for why this is a single shared predicate rather than
@@ -28,6 +30,7 @@ export function MobileSidebar({ open, onClose }: Props) {
     ready_to_trade: setup?.ready_to_trade,
     has_delivery_access: hasDeliveryAccess(settings),
     pos_enabled: settings?.pos_enabled,
+    is_event_vendor: eventAccess?.is_event_vendor,
   };
 
   const visibleItems = navItems.filter((item) => isNavItemVisible(item, ctx));

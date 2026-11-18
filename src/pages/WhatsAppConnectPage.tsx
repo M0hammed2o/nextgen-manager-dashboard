@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth';
 import { useBusinessSettings } from '@/hooks/use-business-settings';
+import { useEventAccess } from '@/hooks/use-event-access';
 import { formatDateTime } from '@/lib/mappers';
 import { launchEmbeddedSignup } from '@/lib/whatsapp-embedded-signup';
 import type {
@@ -138,6 +139,7 @@ export default function WhatsAppConnectPage() {
   const isOwner = user?.role === 'OWNER';
 
   const { data: settings, isLoading: settingsLoading } = useBusinessSettings();
+  const { data: eventAccess } = useEventAccess();
   // Only fires the connection queries once settings have actually loaded and
   // confirm the module is on — defaulting this to `true` while settings is
   // still `undefined` (as the render-time fallback below does) would fire
@@ -210,6 +212,22 @@ export default function WhatsAppConnectPage() {
   });
 
   if (settingsLoading) return <PageSkeleton />;
+
+  // Souk event vendors cannot connect their own WhatsApp number (the backend
+  // refuses with 403 EVENT_WHATSAPP_NOT_AVAILABLE), so explain rather than
+  // offer a button that can only fail.
+  if (eventAccess?.is_event_vendor) {
+    return (
+      <div className="space-y-6 max-w-2xl">
+        <PageHeader title="WhatsApp Connect" description="Connect your own WhatsApp Business number" />
+        <EmptyState
+          icon={<MessageCircle className="w-10 h-10" />}
+          title="WhatsApp is not available for event stalls yet"
+          description="Event vendors sell through the till. WhatsApp ordering for event stalls is waiting for NextGen approval and cannot be connected yet."
+        />
+      </div>
+    );
+  }
 
   if (!whatsappEnabled) {
     return (

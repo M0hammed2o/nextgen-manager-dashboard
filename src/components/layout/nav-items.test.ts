@@ -161,7 +161,8 @@ describe('UI V2.1 consolidation (A2-A6)', () => {
   });
 
   it('the final top-level nav order matches the brief: Dashboard, (Setup), Orders, Menu, Specials, (Loyalty), Customers, Staff, Till, Delivery Orders, (Inventory), (Stocktake), Analytics, Settings', () => {
-    expect(navItems.map((item) => item.label)).toEqual([
+    // Souk's event-vendor-only entries are excluded: this pins what a restaurant tenant sees.
+    expect(navItems.filter((item) => !item.eventVendorOnly).map((item) => item.label)).toEqual([
       'Dashboard', 'Setup', 'Orders', 'Menu', 'Specials', 'Loyalty', 'Customers', 'Staff', 'Till',
       'Delivery Orders', 'Inventory', 'Stocktake', 'Analytics', 'Settings',
     ]);

@@ -34,6 +34,7 @@ import { BarChart3, Boxes, LayoutDashboard, Menu as MenuIcon, ShoppingCart, Uten
 
 import { cn } from '@/lib/utils';
 import { useBusinessSettings } from '@/hooks/use-business-settings';
+import { useEventAccess } from '@/hooks/use-event-access';
 
 interface Props {
   onOpenMore: () => void;
@@ -41,11 +42,15 @@ interface Props {
 
 export function MobileBottomNav({ onOpenMore }: Props) {
   const { data: settings } = useBusinessSettings();
+  const { data: eventAccess } = useEventAccess();
   const location = useLocation();
+  const isEventVendor = eventAccess?.is_event_vendor === true;
   const inventoryEnabled = settings?.inventory_enabled === true;
 
   const primary = [
-    { to: '/', icon: LayoutDashboard, label: 'Home', exact: true },
+    isEventVendor
+      ? { to: '/event', icon: LayoutDashboard, label: 'My event', exact: false }
+      : { to: '/', icon: LayoutDashboard, label: 'Home', exact: true },
     { to: '/orders', icon: ShoppingCart, label: 'Orders' },
     inventoryEnabled
       ? { to: '/stock', icon: Boxes, label: 'Stock' }
