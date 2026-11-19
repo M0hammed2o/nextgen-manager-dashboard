@@ -161,6 +161,11 @@ export interface OrderItem {
   // unused by this app today.
   selected_options_snapshot: Array<{ group_name: string; option_name: string; price_delta_cents: number }> | null;
   special_instructions: string | null;
+  // Product variants (backend migration 0066) — optional so older payloads still type-check.
+  variant_id?: string | null;
+  variant_label_snapshot?: string | null;
+  /** Units of this line already returned through a line-level refund. */
+  returned_quantity?: number | null;
 }
 
 // Backend Order.payment_status — the full set the model actually writes
