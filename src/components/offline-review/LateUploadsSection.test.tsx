@@ -153,6 +153,8 @@ describe('late uploads helpers', () => {
 
   it('labels the new flag reasons', () => {
     expect(reasonChipLabel('late_capture_approved')).toBe('Late upload approved');
+    expect(reasonChipLabel('post_event_grace_upload')).toBe('Uploaded after event ended');
+    expect(reasonExplanation('post_event_grace_upload')).toMatch(/waited for an owner or manager/);
     expect(reasonExplanation('post_event_grace_sync')).toMatch(/after the event ended/);
   });
 });

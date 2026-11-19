@@ -36,6 +36,7 @@ export const OFFLINE_REASON_FILTERS = [
   'cashier_differs_from_syncer',
   'post_event_grace_sync',
   'late_capture_approved',
+  'post_event_grace_upload',
 ] as const;
 export type OfflineReason = (typeof OFFLINE_REASON_FILTERS)[number];
 
@@ -50,6 +51,7 @@ const CHIP_LABELS: Record<OfflineReason, string> = {
   cashier_differs_from_syncer: 'Cashier differs',
   post_event_grace_sync: 'Uploaded after event',
   late_capture_approved: 'Late upload approved',
+  post_event_grace_upload: 'Uploaded after event ended',
 };
 
 function humanise(reason: string): string {
@@ -86,6 +88,8 @@ export function reasonExplanation(
       return 'Synced more than 12 hours after the sale was made.';
     case 'post_event_grace_sync':
       return 'Made on a paid event day and uploaded after the event ended, during the upload-only window.';
+    case 'post_event_grace_upload':
+      return 'Uploaded during the upload-only window after the event, so it waited for an owner or manager to approve it.';
     case 'late_capture_approved':
       return 'Uploaded after the automatic time limit and approved by an owner or manager.';
     default:
