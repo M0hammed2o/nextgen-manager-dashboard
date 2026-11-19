@@ -87,11 +87,30 @@ export interface EventAccessEvent {
   subscriptions: AccessSubscription[];
 }
 
+/**
+ * Souk WhatsApp gate: what an event vendor still needs before customers get a
+ * WhatsApp when their order is ready. Sent by GET /v1/business/event-access
+ * for event vendors only (absent on older backends).
+ */
+export type EventWhatsAppState = 'AWAITING_ADMIN_APPROVAL' | 'NOT_CONNECTED' | 'TEMPLATE_PENDING' | 'READY';
+
+export interface EventWhatsAppStatus {
+  state: EventWhatsAppState;
+  whatsapp_enabled: boolean;
+  connection_status: string | null;
+  template_name: string | null;
+  template_language: string | null;
+  template_approved: boolean;
+  suggested_template: { name: string; language: string; category: string; body: string };
+}
+
 export interface EventAccess {
   is_event_vendor: boolean;
   access_level: AccessLevel | null;
   reason: string | null;
   events: EventAccessEvent[];
+  ready_notify_available?: boolean;
+  whatsapp?: EventWhatsAppStatus;
 }
 
 export interface EventSubscription {

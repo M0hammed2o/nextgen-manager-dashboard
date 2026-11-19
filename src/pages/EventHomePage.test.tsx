@@ -122,6 +122,63 @@ describe('EventHomePage', () => {
     expect(banner).toHaveTextContent(text);
   });
 
+  function withWhatsApp(state: string, extra: Record<string, unknown> = {}) {
+    return {
+      ...access('TRADE', 'PAID_DAY'),
+      ready_notify_available: state === 'READY',
+      whatsapp: {
+        state, whatsapp_enabled: state !== 'AWAITING_ADMIN_APPROVAL', connection_status: null,
+        template_name: null, template_language: null, template_approved: state === 'READY',
+        suggested_template: {
+          name: 'order_ready_v1', language: 'en_US', category: 'UTILITY',
+          body: 'Hi! Your order {{1}} from {{2}} is ready for collection at {{3}}.',
+        },
+        ...extra,
+      },
+    };
+  }
+
+  it('shows WhatsApp as awaiting NextGen approval, with no connect button', async () => {
+    mockApi(withWhatsApp('AWAITING_ADMIN_APPROVAL') as never);
+    renderAt(<EventHomePage />);
+    expect(await screen.findByTestId('event-whatsapp-status')).toHaveTextContent(/awaiting NextGen approval/);
+    expect(screen.queryByRole('link', { name: /Connect WhatsApp/ })).toBeNull();
+  });
+
+  it('links an approved but unconnected vendor to the existing WhatsApp connection page', async () => {
+    mockApi(withWhatsApp('NOT_CONNECTED') as never);
+    renderAt(<EventHomePage />);
+    const link = await screen.findByRole('link', { name: /Connect WhatsApp/ });
+    expect(link).toHaveAttribute('href', '/settings/whatsapp');
+    expect(screen.getByText(/Meta bills you directly/)).toBeInTheDocument();
+  });
+
+  it('shows the template to submit while it is pending', async () => {
+    mockApi(withWhatsApp('TEMPLATE_PENDING', { template_name: 'order_ready_v1' }) as never);
+    renderAt(<EventHomePage />);
+    const box = await screen.findByTestId('event-whatsapp-template');
+    expect(within(box).getByText('order_ready_v1')).toBeInTheDocument();
+    expect(within(box).getByText('Utility')).toBeInTheDocument();
+    expect(within(box).getByText(/is ready for collection at \{\{3\}\}/)).toBeInTheDocument();
+    expect(within(box).getByText(/waiting for NextGen to confirm/)).toBeInTheDocument();
+  });
+
+  it('shows WhatsApp ready, without the checklist counting it', async () => {
+    mockApi(withWhatsApp('READY') as never);
+    renderAt(<EventHomePage />);
+    expect(await screen.findByTestId('event-whatsapp-status')).toHaveTextContent('Ready');
+    expect(screen.queryByTestId('event-whatsapp-template')).toBeNull();
+    const list = await screen.findByRole('list', { name: 'Event checklist' });
+    expect(within(list).queryByText(/WhatsApp/)).toBeNull();
+  });
+
+  it('shows no WhatsApp card when the backend does not report it', async () => {
+    mockApi(access('TRADE', 'PAID_DAY'));
+    renderAt(<EventHomePage />);
+    await screen.findByRole('list', { name: 'Event checklist' });
+    expect(screen.queryByTestId('event-whatsapp-card')).toBeNull();
+  });
+
   it('does not show the event checklist to a restaurant tenant', async () => {
     mockApi(access(null, null, false));
     renderAt(<EventHomePage />);

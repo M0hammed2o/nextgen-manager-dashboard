@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { EmptyState, ErrorState, PageHeader, PageSkeleton } from '@/components/shared/PageComponents';
 import { EventAccessBanner } from '@/components/shared/EventAccessBanner';
+import { EventWhatsAppCard } from '@/components/shared/EventWhatsAppCard';
 
 type StepStatus = 'done' | 'partial' | 'todo' | 'manual';
 
@@ -208,6 +209,9 @@ export default function EventHomePage() {
           </li>
         ))}
       </ol>
+
+      {/* Optional, so not counted in the checklist progress above. */}
+      {data.whatsapp && <EventWhatsAppCard whatsapp={data.whatsapp} />}
     </div>
   );
 }
