@@ -19,6 +19,7 @@ import AnalyticsPage from "./pages/AnalyticsPage";
 import SettingsPage from "./pages/SettingsPage";
 import BillingPage from "./pages/BillingPage";
 import TillPage from "./pages/TillPage";
+import OfflineSalesReviewPage from "./pages/OfflineSalesReviewPage";
 import IngredientsPage from '@/pages/IngredientsPage';
 import RecipesPage from '@/pages/RecipesPage';
 import StockPage from '@/pages/StockPage';
@@ -82,6 +83,7 @@ const App = () => (
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/settings/billing" element={<BillingPage />} />
                 <Route path="/till" element={<TillPage />} />
+                <Route path="/offline-sales" element={<OfflineSalesReviewPage />} />
                 <Route path="/ingredients" element={<IngredientsPage />} />
                 <Route path="/recipes" element={<RecipesPage />} />
                 <Route path="/stock" element={<StockPage />} />

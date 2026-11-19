@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  BarChart3, Bike, Boxes, ClipboardCheck, Download,
+  BarChart3, Bike, CloudOff, Boxes, ClipboardCheck, Download,
   CalendarDays, FileUp, Gift, LayoutDashboard, MessageCircle, Receipt, Rocket,
   Palette, Settings, ShoppingCart, Sparkles, Store, UserRound, Users, UtensilsCrossed, Wallet,
 } from 'lucide-react';
@@ -142,6 +142,7 @@ export const navItems: NavItem[] = [
   { to: '/customers', icon: UserRound, label: 'Customers', hideForEventVendor: true },
   { to: '/staff', icon: Users, label: 'Staff' },
   { to: '/till', icon: Wallet, label: 'Till', requiresPos: true },
+  { to: '/offline-sales', icon: CloudOff, label: 'Offline sales', requiresPos: true },
   { to: '/delivery-orders', icon: Bike, label: 'Delivery Orders', requiresDeliveryAccess: true, hideForEventVendor: true },
   { to: '/stock', icon: Boxes, label: 'Inventory', requiresInventory: true },
   { to: '/stocktake', icon: ClipboardCheck, label: 'Stocktake', requiresInventory: true },

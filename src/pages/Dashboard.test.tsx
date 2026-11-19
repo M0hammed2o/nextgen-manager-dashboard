@@ -10,6 +10,10 @@ vi.mock('@/lib/api-client', async () => {
   return { ...actual, apiClient: { ...actual.apiClient, get: vi.fn() } };
 });
 
+vi.mock('@/lib/auth', () => ({
+  useAuth: () => ({ user: { role: 'OWNER' } }),
+}));
+
 function mockApi() {
   vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
     if (url.startsWith('/v1/business/analytics/summary')) {
