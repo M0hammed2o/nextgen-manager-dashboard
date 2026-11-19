@@ -142,10 +142,13 @@ describe('EventDaysPage - day picker and quote', () => {
     expect(await screen.findByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });
 
-  it('shows the EFT instructions placeholder', async () => {
+  it('says plainly that bank details are not configured, never a raw placeholder (e2e finding)', async () => {
     mockApi(eventsPayload());
     renderPage();
-    expect(await screen.findByTestId('eft-instructions')).toHaveTextContent(/PLACEHOLDER/);
+    const card = await screen.findByTestId('eft-instructions');
+    expect(card).toHaveTextContent(/Bank details are not yet configured/);
+    expect(card).toHaveTextContent(/Contact the event organiser/);
+    expect(card).not.toHaveTextContent(/PLACEHOLDER|\[/);
   });
 });
 

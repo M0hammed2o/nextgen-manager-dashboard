@@ -7,7 +7,7 @@ import { EVENT_SUBSCRIPTIONS_KEY, useEventSubscriptions } from '@/hooks/use-even
 import { useEventAccess } from '@/hooks/use-event-access';
 import { useToast } from '@/hooks/use-toast';
 import {
-  EFT_INSTRUCTIONS_PLACEHOLDER, billableDaysInRange, coveredDays, estimateCents, formatDay, formatRange,
+  EFT_DETAILS_NOT_CONFIGURED, billableDaysInRange, coveredDays, estimateCents, formatDay, formatRange,
   parseIsoDay, subscriptionErrorMessage,
   type EventSubscription, type EventSubscriptionsEvent,
 } from '@/lib/souk';
@@ -75,7 +75,7 @@ export default function EventDaysPage() {
               <CardDescription>Pay by EFT, then submit the reference from your bank below.</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="whitespace-pre-line text-sm" data-testid="eft-instructions">{EFT_INSTRUCTIONS_PLACEHOLDER}</p>
+              <p className="whitespace-pre-line text-sm" data-testid="eft-instructions">{EFT_DETAILS_NOT_CONFIGURED}</p>
             </CardContent>
           </Card>
           {events.map((e) => <EventDaysCard key={e.event_id} event={e} />)}
