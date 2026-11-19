@@ -5,7 +5,7 @@ import { CalendarDays, Loader2, MailCheck, MapPin } from 'lucide-react';
 import { apiClient, ApiError } from '@/lib/api-client';
 import {
   type EventCategory, type PublicEvent, type RegisterRequest, type RegisterResponse,
-  formatDay, passwordProblem, registrationErrorMessage,
+  formatDay, loginOpensLater, passwordProblem, registrationErrorMessage,
 } from '@/lib/souk';
 import { formatCents } from '@/lib/mappers';
 import { Button } from '@/components/ui/button';
@@ -143,6 +143,7 @@ function RegistrationBody({ event }: { event: PublicEvent }) {
 }
 
 function CheckYourEmail({ result, email }: { result: RegisterResponse; email: string }) {
+  const opensOn = loginOpensLater(result.login_opens_on);
   return (
     <Card>
       <CardHeader>
@@ -160,8 +161,8 @@ function CheckYourEmail({ result, email }: { result: RegisterResponse; email: st
           email is confirmed. Your business code is in the email too.
         </p>
         <p className="text-sm" data-testid="login-opens">
-          {result.login_opens_on
-            ? <>You can log in from <strong>{formatDay(result.login_opens_on)}</strong>.</>
+          {opensOn
+            ? <>You can log in from <strong>{formatDay(opensOn)}</strong>.</>
             : <>You can log in <strong>now</strong>.</>}
         </p>
         <ResendVerificationButton email={email} className="w-full" />

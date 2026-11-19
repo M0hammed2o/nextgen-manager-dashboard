@@ -32,7 +32,7 @@ const EVENT = {
 
 const ACCEPTED = {
   status: 'verification_pending', next: 'check_email', message: 'Check your email to continue.',
-  access_level: 'NONE', login_opens_on: '2026-12-02',
+  access_level: 'NONE', login_opens_on: '2099-12-02',
 };
 
 function renderPage() {
@@ -88,7 +88,7 @@ describe('EventRegisterPage', () => {
     expect(await screen.findByText('Check your email')).toBeInTheDocument();
     expect(screen.getByTestId('check-email')).toHaveTextContent('thandi@example.com');
     expect(screen.queryByTestId('business-code')).not.toBeInTheDocument();
-    expect(screen.getByTestId('login-opens')).toHaveTextContent(/2 Dec 2026/);
+    expect(screen.getByTestId('login-opens')).toHaveTextContent(/2 Dec 2099/);
     expect(screen.getByRole('link', { name: 'Go to login' })).toHaveAttribute('href', '/login');
     expect(screen.getByRole('button', { name: /Resend verification email/ })).toBeEnabled();
 
@@ -112,6 +112,16 @@ describe('EventRegisterPage', () => {
     await fillForm();
     fireEvent.click(screen.getByRole('button', { name: 'Register' }));
     expect(await screen.findByTestId('login-opens')).toHaveTextContent(/log in now/);
+  });
+
+  it('says "now" (never a past date) when an older backend sends a login day that has passed', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue(EVENT as never);
+    vi.mocked(apiClient.post).mockResolvedValue({ ...ACCEPTED, access_level: 'CONFIGURE', login_opens_on: '2020-01-01' } as never);
+    renderPage();
+    await fillForm();
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }));
+    expect(await screen.findByTestId('login-opens')).toHaveTextContent(/log in now/);
+    expect(screen.getByTestId('login-opens')).not.toHaveTextContent(/2020/);
   });
 
   it('resends the verification email for the address typed, then counts down before allowing another', async () => {

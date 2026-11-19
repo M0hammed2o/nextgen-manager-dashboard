@@ -206,6 +206,18 @@ export function parseIsoDay(iso: string): Date {
   return new Date(y, (m || 1) - 1, d || 1, 12);
 }
 
+/**
+ * The day login opens, or null when it is today or earlier. The backend sends
+ * null once login is open; this also guards an older backend that sent the
+ * (past) first-billable-day-minus-prep date regardless.
+ */
+export function loginOpensLater(iso: string | null | undefined, today: Date = new Date()): string | null {
+  if (!iso) return null;
+  const opens = parseIsoDay(iso);
+  const t = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12);
+  return opens.getTime() > t.getTime() ? iso : null;
+}
+
 export function formatDay(iso: string | null | undefined, opts?: { weekday?: boolean }): string {
   if (!iso) return '-';
   return parseIsoDay(iso).toLocaleDateString('en-ZA', {

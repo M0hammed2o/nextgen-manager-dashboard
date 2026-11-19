@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ApiError } from '@/lib/api-client';
 import {
-  billableDaysInRange, coveredDays, describeAccessReason, estimateCents, passwordProblem, subscriptionErrorMessage,
+  billableDaysInRange, coveredDays, describeAccessReason, estimateCents, loginOpensLater, passwordProblem, subscriptionErrorMessage,
 } from './souk';
 
 const DAYS = ['2026-12-05', '2026-12-06', '2026-12-09'];
@@ -44,4 +44,14 @@ describe('souk helpers', () => {
     expect(describeAccessReason('SOMETHING_NEW')).toBe('something new');
     expect(describeAccessReason(null)).toBe('');
   });
+});
+
+describe('loginOpensLater', () => {
+  const today = new Date(2026, 10, 19, 9); // 19 Nov 2026, local
+  it('keeps a future day', () => expect(loginOpensLater('2026-11-20', today)).toBe('2026-11-20'));
+  it('drops today and past days (login already open)', () => {
+    expect(loginOpensLater('2026-11-19', today)).toBeNull();
+    expect(loginOpensLater('2026-11-05', today)).toBeNull();
+  });
+  it('passes null through', () => expect(loginOpensLater(null, today)).toBeNull());
 });
