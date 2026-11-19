@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { PageHeader, PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
 import { useToast } from '@/hooks/use-toast';
+import { LateUploadsSection } from '@/components/offline-review/LateUploadsSection';
 
 const LIST_LIMIT = 100;
 
@@ -103,6 +104,8 @@ export default function OfflineSalesReviewPage() {
           need the owner. Marking a sale reviewed only removes it from this list; it changes no money or stock.
         </p>
       </div>
+
+      <LateUploadsSection />
 
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex items-center gap-2">

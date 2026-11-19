@@ -34,6 +34,8 @@ export const OFFLINE_REASON_FILTERS = [
   'capture_day_unpaid_at_sync',
   'late_sync',
   'cashier_differs_from_syncer',
+  'post_event_grace_sync',
+  'late_capture_approved',
 ] as const;
 export type OfflineReason = (typeof OFFLINE_REASON_FILTERS)[number];
 
@@ -46,6 +48,8 @@ const CHIP_LABELS: Record<OfflineReason, string> = {
   capture_day_unpaid_at_sync: 'Unpaid day at sync',
   late_sync: 'Synced late',
   cashier_differs_from_syncer: 'Cashier differs',
+  post_event_grace_sync: 'Uploaded after event',
+  late_capture_approved: 'Late upload approved',
 };
 
 function humanise(reason: string): string {
@@ -80,6 +84,10 @@ export function reasonExplanation(
       return "This sale belongs to a till session that had already been closed, so that session's cash-up does not include it.";
     case 'late_sync':
       return 'Synced more than 12 hours after the sale was made.';
+    case 'post_event_grace_sync':
+      return 'Made on a paid event day and uploaded after the event ended, during the upload-only window.';
+    case 'late_capture_approved':
+      return 'Uploaded after the automatic time limit and approved by an owner or manager.';
     default:
       return `Flagged for review (${humanise(reason)}).`;
   }
@@ -109,3 +117,59 @@ export function acknowledgePath(orderId: string): string {
 
 /** Query-key prefix; acknowledging invalidates everything under it (list + badge). */
 export const OFFLINE_FLAGGED_KEY = 'offline-flagged';
+
+// -- Late uploads awaiting review (BUG-0208; backend OFFLINE_POS_SYNC_CONTRACT.md) --
+
+export type LateUploadStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface LateUploadLine {
+  menu_item_id: string;
+  variant_id: string | null;
+  quantity: number;
+  name: string | null;
+}
+
+/** A queued offline sale the server refused to auto-accept (too old). Pending ones change no money. */
+export interface LateUpload {
+  id: string;
+  status: LateUploadStatus;
+  idempotency_key: string;
+  captured_at: string;
+  received_at: string;
+  captured_by_user_id: string;
+  captured_by_name: string | null;
+  synced_by_user_id: string;
+  synced_by_name: string | null;
+  upload_review_reasons: string[];
+  payment_method: string | null;
+  client_total_cents: number | null;
+  discount_cents: number;
+  lines: LateUploadLine[];
+  decided_by_user_id: string | null;
+  decided_by_name: string | null;
+  decided_at: string | null;
+  decision_note: string | null;
+  order_id: string | null;
+}
+
+export interface LateUploadList {
+  items: LateUpload[];
+  pending_count: number;
+}
+
+export function buildLateUploadsPath(status: LateUploadStatus | 'ALL' = 'PENDING', limit = 100): string {
+  return `/v1/business/pos/offline-reviews?status=${status}&limit=${limit}`;
+}
+
+export function lateUploadDecisionPath(id: string, decision: 'approve' | 'reject'): string {
+  return `/v1/business/pos/offline-reviews/${encodeURIComponent(id)}/${decision}`;
+}
+
+/** Query-key prefix for the late-upload list and the badge's pending count. */
+export const OFFLINE_REVIEWS_KEY = 'offline-reviews';
+
+/** pending_count from a list response; anything unexpected counts as 0 (the badge must never break). */
+export function pendingCountOf(data: unknown): number {
+  const n = (data as Partial<LateUploadList> | null | undefined)?.pending_count;
+  return typeof n === 'number' && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
