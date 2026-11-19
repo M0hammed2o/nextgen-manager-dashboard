@@ -5,7 +5,8 @@ import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth';
 import { useBusinessSettings } from '@/hooks/use-business-settings';
 import {
-  buildFlaggedPath, OFFLINE_FLAGGED_KEY, type FlaggedOfflineOrder,
+  buildFlaggedPath, buildLateUploadsPath, OFFLINE_FLAGGED_KEY, OFFLINE_REVIEWS_KEY, pendingCountOf,
+  type FlaggedOfflineOrder,
 } from '@/lib/offline-review';
 
 const BADGE_LIMIT = 20;
@@ -29,8 +30,18 @@ export function OfflineReviewBadge() {
     retry: false,
   });
 
+  // Late uploads awaiting approval (BUG-0208). Separate request; a failure counts as 0.
+  const { data: late } = useQuery({
+    queryKey: [OFFLINE_REVIEWS_KEY, 'badge'],
+    queryFn: () => apiClient.get<unknown>(buildLateUploadsPath('PENDING', 1)),
+    enabled: allowed,
+    staleTime: 60000,
+    retry: false,
+  });
+
   const count = Array.isArray(data) ? data.length : 0;
-  if (!allowed || count === 0) return null;
+  const pendingLate = pendingCountOf(late);
+  if (!allowed || (count === 0 && pendingLate === 0)) return null;
   const label = count >= BADGE_LIMIT ? `${BADGE_LIMIT}+` : String(count);
 
   return (
@@ -40,7 +51,17 @@ export function OfflineReviewBadge() {
     >
       <CloudOff className="w-5 h-5 text-amber-600" />
       <span className="flex-1">
-        <span className="font-semibold">{label}</span> offline {count === 1 ? 'sale needs' : 'sales need'} review
+        {count > 0 && (
+          <span>
+            <span className="font-semibold">{label}</span> offline {count === 1 ? 'sale needs' : 'sales need'} review
+          </span>
+        )}
+        {count > 0 && pendingLate > 0 && <span> · </span>}
+        {pendingLate > 0 && (
+          <span data-testid="late-uploads-count">
+            <span className="font-semibold">{pendingLate}</span> late {pendingLate === 1 ? 'upload awaits' : 'uploads await'} approval
+          </span>
+        )}
       </span>
       <ArrowRight className="w-4 h-4" />
     </Link>
