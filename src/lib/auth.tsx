@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { AuthUser, LoginRequest, LoginResponse, SetPasswordRequest } from '@/types/api';
+import { QueryClientContext } from '@tanstack/react-query';
 import { apiClient } from './api-client';
 import { authStorage } from './auth-storage';
 
@@ -15,6 +16,12 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  // Every cached query is the signed-in restaurant's data. Dropping the cache
+  // whenever the session changes means a different restaurant signing in on
+  // the same browser never sees the previous one's figures, even briefly
+  // (staleTime would otherwise serve them until the refetch). Read from
+  // context, not useQueryClient(), so a provider-less test render still works.
+  const queryClient = useContext(QueryClientContext);
   const [user, setUser] = useState<AuthUser | null>(() => {
     try {
       const stored = authStorage.getItem('auth_user');
@@ -49,11 +56,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // a password that genuinely contains leading/trailing whitespace.
     const normalizedReq: LoginRequest = { ...req, email: req.email.trim().toLowerCase() };
     const res = await apiClient.post<LoginResponse>('/v1/auth/login', normalizedReq);
+    queryClient?.clear();
     authStorage.setItem('access_token', res.tokens.access_token);
     authStorage.setItem('refresh_token', res.tokens.refresh_token);
     authStorage.setItem('auth_user', JSON.stringify(res.user));
     setUser(res.user);
-  }, []);
+  }, [queryClient]);
 
   const setNewPassword = useCallback(async (req: SetPasswordRequest) => {
     // Same response shape as /auth/login — auto-logs-in on success.
@@ -75,11 +83,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // cleanup that can't block or fail the logout itself.
     const rt = authStorage.getItem('refresh_token');
     apiClient.clearTokens();
+    queryClient?.clear();
     setUser(null);
     if (rt) {
       apiClient.post('/v1/auth/logout', { refresh_token: rt }).catch(() => { /* best-effort only */ });
     }
-  }, []);
+  }, [queryClient]);
 
   return (
     <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, setNewPassword, logout }}>

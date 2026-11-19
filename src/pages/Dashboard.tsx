@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { formatDateTime } from '@/lib/mappers';
 import { WhatsAppUsageCard } from '@/components/dashboard/WhatsAppUsageCard';
+import { OfflineReviewBadge } from '@/components/dashboard/OfflineReviewBadge';
 import { useState } from 'react';
 
 type Period = 'today' | '7d' | '30d';
@@ -70,6 +71,8 @@ export default function DashboardPage() {
           ))}
         </div>
       </div>
+
+      <OfflineReviewBadge />
 
       {/* UI V2.1 (A1): LLM Calls/LLM Cost removed — internal infra metrics
           with no owner-facing action, never meant to be customer-visible.

@@ -962,15 +962,38 @@ export interface DeliveryConnectionResponse {
   updated_at: string | null;
 }
 
+// ACCEPT_UNCONFIRMED (migration 0059): the sale stands and the kitchen has
+// it, but the platform never confirmed NextGen's accept — retry it or
+// confirm it from the platform's own tablet. Never auto-declined.
 export type DeliveryOrderStatus =
   | 'RECEIVED' | 'FETCHING' | 'NEEDS_MAPPING' | 'READY_TO_ACCEPT'
-  | 'ACCEPTED' | 'DENIED' | 'FULFILLED' | 'CANCELLED' | 'FAILED';
+  | 'ACCEPTED' | 'ACCEPT_UNCONFIRMED' | 'DENIED' | 'FULFILLED' | 'CANCELLED' | 'FAILED' | 'UNKNOWN';
 
-/** Item/modifier text that failed to resolve against a saved mapping (unresolved_items_json). */
+/**
+ * Item/modifier that failed to resolve against a saved mapping
+ * (unresolved_items_json). `external_id` is the platform's own id — the
+ * mapping key. Rows recorded before 2026-10-26 carry only text (`kind` and
+ * `external_id` null).
+ */
 export interface DeliveryUnresolvedItem {
+  kind?: DeliveryMappingKind | null;
   external_id?: string | null;
   external_text?: string;
+  parent_external_text?: string | null;
+  group_title?: string | null;
+  removed?: boolean;
   [key: string]: unknown;
+}
+
+/** What was ordered, from the allow-listed fetch snapshot (no phone, no address). */
+export interface DeliveryOrderLine {
+  external_id: string | null;
+  title: string;
+  quantity: number;
+  unit_price_cents: number | null;
+  total_price_cents: number | null;
+  special_instructions: string | null;
+  modifiers: { external_id: string | null; title: string; quantity: number; removed: boolean; group_title: string | null }[];
 }
 
 export interface DeliveryOrderResponse {
@@ -995,6 +1018,12 @@ export interface DeliveryOrderResponse {
   deny_reason_text: string | null;
   unresolved_items: DeliveryUnresolvedItem[] | null;
   failure_reason: string | null;
+  // The platform's short order code (Uber display_id) — what a courier quotes.
+  display_id?: string | null;
+  // Outcome of the latest kitchen -> platform push (ready / restaurant cancel).
+  last_provider_sync_at?: string | null;
+  last_provider_sync_error?: string | null;
+  lines?: DeliveryOrderLine[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -1040,6 +1069,54 @@ export interface DeliveryMappingResponse {
   is_ignored: boolean;
   last_seen_at: string | null;
   times_used: number;
+  // The platform's own price for this entity (from the last menu import)
+  // beside the in-store price. Informational — orders are always booked at
+  // the price the platform actually charged.
+  provider_price_cents?: number | null;
+  provider_group_title?: string | null;
+  menu_price_cents?: number | null;
+}
+
+/** POST /v1/business/delivery/menu-mappings/import — reads (never writes) the platform menu. */
+export interface DeliveryCatalogueImportResponse {
+  provider: DeliveryProvider;
+  fetched: number;
+  created: number;
+  auto_mapped: number;
+  adopted_from_csv: number;
+  renamed: number;
+  unchanged: number;
+  name_collisions: number;
+}
+
+/** GET /v1/business/delivery/health — per-provider order-flow health. */
+export interface DeliveryProviderHealth {
+  provider: DeliveryProvider;
+  provider_label: string;
+  connection_status: DeliveryConnectionStatus;
+  environment: string | null;
+  needs_attention: boolean;
+  error_reason: string | null;
+  store_status: string | null;
+  last_webhook_at: string | null;
+  open_orders: number;
+  needs_mapping: number;
+  ready_to_accept: number;
+  accept_unconfirmed: number;
+  provider_sync_errors: number;
+  accepted_24h: number;
+  denied_24h: number;
+  failed_24h: number;
+  // accepted / (accepted + denied + failed) over 24h — the platform's own
+  // "order injection success rate" measure. null when there were no orders.
+  acceptance_rate_24h: number | null;
+  unmapped_menu_entries: number;
+}
+
+export interface DeliveryStoreStatusResponse {
+  provider: DeliveryProvider;
+  store_status: string | null;
+  last_status_synced_at: string | null;
 }
 
 export interface DeliveryMappingUpsertRequest {
@@ -1052,4 +1129,168 @@ export interface DeliveryMappingUpsertRequest {
   menu_add_on_id?: string | null;
   removable_ref_id?: string | null;
   is_ignored?: boolean;
+}
+
+// ── Sales Wallets (reporting views by sales channel — NOT stored money) ─────
+// GET /v1/business/analytics/sales-wallets and
+// GET /v1/business/analytics/sales-wallets/{wallet}/orders. Owner/manager only,
+// available on every plan (no Advanced Analytics gate).
+export type SalesWalletRange = 'today' | 'yesterday' | '7d' | 'month' | 'custom';
+export type SalesWalletKey = 'MR_D' | 'UBER_EATS' | 'GENERAL' | 'TOTAL';
+
+/** `available: false` carries a `reason`; the UI must never show a number for it. */
+export interface SalesWalletAvailability {
+  available: boolean;
+  reason?: string | null;
+}
+
+export interface SalesWalletTotals {
+  key: string;
+  label: string;
+  order_count: number;
+  gross_cents: number;
+  refunds_cents: number;
+  net_cents: number;
+  vat_cents: number;
+  voided_count: number;
+  voided_cents: number;
+  payment_status_counts: Record<string, number>;
+}
+
+export interface SalesWallet extends SalesWalletTotals {
+  sources?: string[];
+  /** null = not applicable (General Sales). */
+  platform_fees?: SalesWalletAvailability | null;
+  settlement?: SalesWalletAvailability | null;
+}
+
+export interface SalesWalletsReport {
+  range: SalesWalletRange;
+  start_date: string;
+  end_date: string;
+  timezone: string;
+  currency: string;
+  wallets: SalesWallet[];
+  total: SalesWalletTotals;
+}
+
+export interface SalesWalletSourceBreakdown {
+  source: string;
+  label: string;
+  order_count: number;
+  gross_cents: number;
+  refunds_cents: number;
+  net_cents: number;
+}
+
+export interface SalesWalletOrder {
+  id: string;
+  order_number: string;
+  source: string;
+  source_label: string;
+  sale_at: string;
+  status: string;
+  payment_status: string;
+  payment_method: string | null;
+  gross_cents: number;
+  refund_cents: number;
+  net_cents: number;
+  external_order_id: string | null;
+}
+
+export interface SalesWalletOrdersResponse {
+  wallet: SalesWalletKey;
+  label: string;
+  start_date: string;
+  end_date: string;
+  timezone: string;
+  currency: string;
+  page: number;
+  page_size: number;
+  total_count: number;
+  summary: SalesWallet;
+  by_source: SalesWalletSourceBreakdown[];
+  orders: SalesWalletOrder[];
+}
+
+// ── Best-selling products (top 3 per sales channel) ─────────────────────────
+// GET /v1/business/analytics/best-sellers and
+// GET /v1/business/analytics/products/{menu_item_id}/performance.
+// Owner/manager only, every plan. Reporting only.
+export type BestSellerRankBy = 'quantity' | 'revenue';
+export type BestSellerChannelKey = 'UBER_EATS' | 'MR_D' | 'GENERAL' | 'ALL';
+
+export interface BestSellerRow {
+  rank: 1 | 2 | 3;
+  menu_item_id: string;
+  name: string;
+  image_url: string | null;
+  is_deleted: boolean;
+  quantity: number;
+  gross_cents: number;
+  /** null = a partial refund on an order cannot be attributed to one product. */
+  refund_adjusted_cents: number | null;
+  has_unattributed_refund: boolean;
+  quantity_share_pct: number | null;
+  revenue_share_pct: number | null;
+}
+
+export interface BestSellerChannel {
+  key: BestSellerChannelKey;
+  label: string;
+  product_count: number;
+  total_quantity: number;
+  total_item_gross_cents: number;
+  ranking: BestSellerRow[];
+  unmapped: { quantity: number; gross_cents: number; names: string[] };
+  unattributed_refunds: { order_count: number; refunds_cents: number };
+  awaiting_mapping_orders: number;
+}
+
+export interface BestSellersReport {
+  range: SalesWalletRange;
+  start_date: string;
+  end_date: string;
+  timezone: string;
+  currency: string;
+  rank_by: BestSellerRankBy;
+  share_basis: string;
+  refund_basis: string;
+  channels: BestSellerChannel[];
+}
+
+export interface ProductChannelPerformance {
+  key: 'UBER_EATS' | 'MR_D' | 'GENERAL';
+  label: string;
+  quantity: number;
+  gross_cents: number;
+  quantity_share_pct: number | null;
+  revenue_share_pct: number | null;
+}
+
+export interface ProductDailyPoint {
+  quantity: number;
+  gross_cents: number;
+}
+
+export interface ProductPerformance {
+  range: SalesWalletRange;
+  start_date: string;
+  end_date: string;
+  timezone: string;
+  currency: string;
+  menu_item_id: string;
+  name: string;
+  image_url: string | null;
+  is_deleted: boolean;
+  total_quantity: number;
+  total_gross_cents: number;
+  channels: ProductChannelPerformance[];
+  variants: { label: string; quantity: number; gross_cents: number }[];
+  daily: {
+    day: string;
+    uber_eats: ProductDailyPoint;
+    mr_d: ProductDailyPoint;
+    general: ProductDailyPoint;
+  }[];
 }

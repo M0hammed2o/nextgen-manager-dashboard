@@ -1,8 +1,8 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  BarChart3, Bike, Boxes, ClipboardCheck, Download,
-  FileUp, Gift, LayoutDashboard, MessageCircle, Receipt, Rocket,
-  Palette, Settings, ShoppingCart, Sparkles, UserRound, Users, UtensilsCrossed, Wallet,
+  BarChart3, Bike, CloudOff, Boxes, ClipboardCheck, Download,
+  CalendarDays, FileUp, Gift, LayoutDashboard, MessageCircle, Receipt, Rocket,
+  Palette, Settings, ShoppingCart, Sparkles, Store, UserRound, Users, UtensilsCrossed, Wallet,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -59,6 +59,19 @@ export interface NavItem {
    * during rollout. Only an explicit `false` hides it.
    */
   requiresPos?: boolean;
+  /**
+   * Souk event vendors: shown ONLY once `/v1/business/event-access` positively
+   * says `is_event_vendor` (hidden while unknown, like every entitlement gate).
+   */
+  eventVendorOnly?: boolean;
+  /**
+   * Souk event vendors get a simplified menu: entries that make no sense for
+   * a stall (specials, customer lists, delivery platforms, WhatsApp, the
+   * restaurant Setup page, which the event checklist replaces) are hidden
+   * once `is_event_vendor` is true. Unlike `eventVendorOnly` this defaults to
+   * VISIBLE while unknown, so a restaurant tenant's menu is never altered.
+   */
+  hideForEventVendor?: boolean;
   /**
    * UI V2.1, A6: an expandable group (currently only "Settings") instead of
    * a standalone route. Each child is rendered as its own link when the
@@ -118,16 +131,19 @@ export interface NavItem {
  *   brief. "General" is the existing /settings page, unchanged inside.
  */
 export const navItems: NavItem[] = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/setup', icon: Rocket, label: 'Setup', requiresSetupIncomplete: true },
+  { to: '/', icon: LayoutDashboard, label: 'Dashboard', hideForEventVendor: true },
+  { to: '/event', icon: Store, label: 'My event', eventVendorOnly: true },
+  { to: '/event/days', icon: CalendarDays, label: 'Days & payment', eventVendorOnly: true },
+  { to: '/setup', icon: Rocket, label: 'Setup', requiresSetupIncomplete: true, hideForEventVendor: true },
   { to: '/orders', icon: ShoppingCart, label: 'Orders' },
   { to: '/menu', icon: UtensilsCrossed, label: 'Menu' },
-  { to: '/specials', icon: Sparkles, label: 'Specials' },
+  { to: '/specials', icon: Sparkles, label: 'Specials', hideForEventVendor: true },
   { to: '/loyalty', icon: Gift, label: 'Loyalty', requiresLoyalty: true },
-  { to: '/customers', icon: UserRound, label: 'Customers' },
+  { to: '/customers', icon: UserRound, label: 'Customers', hideForEventVendor: true },
   { to: '/staff', icon: Users, label: 'Staff' },
   { to: '/till', icon: Wallet, label: 'Till', requiresPos: true },
-  { to: '/delivery-orders', icon: Bike, label: 'Delivery Orders', requiresDeliveryAccess: true },
+  { to: '/offline-sales', icon: CloudOff, label: 'Offline sales', requiresPos: true },
+  { to: '/delivery-orders', icon: Bike, label: 'Delivery Orders', requiresDeliveryAccess: true, hideForEventVendor: true },
   { to: '/stock', icon: Boxes, label: 'Inventory', requiresInventory: true },
   { to: '/stocktake', icon: ClipboardCheck, label: 'Stocktake', requiresInventory: true },
   // Deliberately ungated here: Core Analytics (summary/top-items/daily) is
@@ -145,11 +161,11 @@ export const navItems: NavItem[] = [
     label: 'Settings',
     children: [
       { to: '/settings', icon: Settings, label: 'General' },
-      { to: '/setup', icon: Rocket, label: 'Setup' },
+      { to: '/setup', icon: Rocket, label: 'Setup', hideForEventVendor: true },
       { to: '/import', icon: FileUp, label: 'Import' },
       { to: '/settings/branding', icon: Palette, label: 'Branding' },
       { to: '/settings/receipts', icon: Receipt, label: 'Receipts' },
-      { to: '/settings/whatsapp', icon: MessageCircle, label: 'WhatsApp', requiresWhatsapp: true },
+      { to: '/settings/whatsapp', icon: MessageCircle, label: 'WhatsApp', requiresWhatsapp: true, hideForEventVendor: true },
       { to: '/exports', icon: Download, label: 'Exports' },
     ],
   },
@@ -187,8 +203,12 @@ export function isNavItemVisible(
      * the opposite of every other one here.
      */
     pos_enabled?: boolean;
+    /** Souk: true once /v1/business/event-access says this business is an event vendor. */
+    is_event_vendor?: boolean;
   } | undefined
 ): boolean {
+  if (item.eventVendorOnly && ctx?.is_event_vendor !== true) return false;
+  if (item.hideForEventVendor && ctx?.is_event_vendor === true) return false;
   if (item.requiresInventory && !ctx?.inventory_enabled) return false;
   if (item.requiresWhatsapp && !ctx?.is_whatsapp_enabled) return false;
   if (item.requiresLoyalty && !ctx?.loyalty_enabled) return false;

@@ -62,11 +62,18 @@ const UBER_EATS_STATUS_META: Record<DeliveryConnectionStatus, ConnectionStatusMe
   },
 };
 
+/**
+ * Live Mr D connectivity is "Pending Partner Approval": NextGen has asked Mr D
+ * for official integration access and Mr D has not granted it (no public
+ * partner API exists — docs/MRD_API_ACCESS_2026-10.md). Until it is officially
+ * enabled, the badge says exactly that and the working path is CSV
+ * reconciliation.
+ */
 const MR_D_META: ConnectionStatusMeta = {
-  badgeLabel: 'File reconciliation only',
+  badgeLabel: 'Pending partner approval',
   badgeVariant: 'outline',
   description:
-    'No live Mr D order-injection integration exists (Mr D publishes no partner API — see docs/MRD_API_ACCESS_2026-10.md). Mr D orders are handled by importing Mr D\'s CSV export.',
+    'No live Mr D order integration yet — live connectivity is pending partner approval from Mr D. Until Mr D authorises API access, Mr D orders are reconciled by importing Mr D\'s CSV export.',
   isLive: false,
 };
 

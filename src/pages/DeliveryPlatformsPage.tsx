@@ -4,22 +4,99 @@ import { apiClient } from '@/lib/api-client';
 import { useBusinessSettings } from '@/hooks/use-business-settings';
 import { formatDateTime } from '@/lib/mappers';
 import { getConnectionStatusMeta, PROVIDER_LABELS, MR_D_CARD_TITLE } from '@/lib/delivery';
-import type { DeliveryConnectionResponse, DeliveryProvider } from '@/types/api';
+import type {
+  DeliveryConnectionResponse, DeliveryProvider, DeliveryProviderHealth, DeliveryStoreStatusResponse,
+} from '@/types/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { PageHeader, PageSkeleton, EmptyState, ErrorState } from '@/components/shared/PageComponents';
 import { DeliverySubNav } from '@/components/delivery/DeliverySubNav';
-import { AlertTriangle, ExternalLink, Loader2, RefreshCw, Truck, Unplug } from 'lucide-react';
+import { AlertTriangle, ExternalLink, Loader2, Pause, Play, RefreshCw, Truck, Unplug } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const PROVIDERS: DeliveryProvider[] = ['UBER_EATS', 'MR_D'];
 
-function ConnectionCard({ connection }: { connection: DeliveryConnectionResponse }) {
+/** Uber's own bar: 99.9% target; below 99% risks revoked API access. */
+const ACCEPTANCE_TARGET = 0.99;
+
+function HealthSummary({ health }: { health: DeliveryProviderHealth }) {
+  const rate = health.acceptance_rate_24h;
+  const decided = health.accepted_24h + health.denied_24h + health.failed_24h;
+  return (
+    <div className="rounded-lg border border-border px-3 py-2.5 text-sm space-y-1.5" aria-label="Order flow health">
+      <p className="text-xs font-medium text-muted-foreground">Last 24 hours</p>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+        <span className="text-muted-foreground">Accepted</span>
+        <span className="font-medium text-foreground">{health.accepted_24h} of {decided}</span>
+        <span className="text-muted-foreground">Acceptance rate</span>
+        <span className={rate !== null && rate < ACCEPTANCE_TARGET ? 'font-medium text-destructive' : 'font-medium text-foreground'}>
+          {rate === null ? 'No orders yet' : `${(rate * 100).toFixed(1)}%`}
+        </span>
+        <span className="text-muted-foreground">Waiting on staff</span>
+        <span className="font-medium text-foreground">{health.open_orders}</span>
+        <span className="text-muted-foreground">Menu items to map</span>
+        <span className="font-medium text-foreground">
+          {health.unmapped_menu_entries > 0 ? (
+            <Link className="underline" to="/settings/delivery/mappings">{health.unmapped_menu_entries}</Link>
+          ) : 0}
+        </span>
+      </div>
+      {rate !== null && rate < ACCEPTANCE_TARGET && (
+        <p className="text-xs text-destructive">
+          Uber expects at least 99% of orders accepted — declined or failed orders count against this restaurant.
+        </p>
+      )}
+      {(health.accept_unconfirmed > 0 || health.provider_sync_errors > 0) && (
+        <p className="text-xs text-destructive">
+          {health.accept_unconfirmed > 0 && `${health.accept_unconfirmed} order(s) not confirmed by Uber. `}
+          {health.provider_sync_errors > 0 && `${health.provider_sync_errors} status update(s) did not reach Uber. `}
+          <Link className="underline" to="/settings/delivery/orders">Review orders</Link>
+        </p>
+      )}
+    </div>
+  );
+}
+
+function StoreStatusControl({ connection }: { connection: DeliveryConnectionResponse }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const paused = connection.store_status === 'PAUSED';
+  const mutation = useMutation({
+    mutationFn: (status: 'ONLINE' | 'PAUSED') =>
+      apiClient.post<DeliveryStoreStatusResponse>(
+        `/v1/business/delivery/connections/${connection.provider}/store-status`, { status },
+      ),
+    onSuccess: (res) => {
+      queryClient.setQueryData<DeliveryConnectionResponse[]>(['delivery-connections'], (prev) =>
+        prev ? prev.map((c) => (c.provider === res.provider ? { ...c, store_status: res.store_status } : c)) : prev
+      );
+      toast({
+        title: res.store_status === 'PAUSED' ? 'New Uber Eats orders paused' : 'Uber Eats orders resumed',
+      });
+    },
+    onError: (err: Error) => toast({ title: 'Could not change the store status on Uber Eats', description: err.message, variant: 'destructive' }),
+  });
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      className="gap-1.5"
+      onClick={() => mutation.mutate(paused ? 'ONLINE' : 'PAUSED')}
+      disabled={mutation.isPending}
+    >
+      {mutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : paused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+      {paused ? 'Resume orders' : 'Pause new orders'}
+    </Button>
+  );
+}
+
+function ConnectionCard({ connection, health }: { connection: DeliveryConnectionResponse; health?: DeliveryProviderHealth }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const meta = getConnectionStatusMeta(connection);
   const isMrD = connection.provider === 'MR_D';
+  const canControlStore = connection.status === 'CONNECTED' || connection.status === 'SANDBOX';
 
   const disableMutation = useMutation({
     mutationFn: () => apiClient.post<DeliveryConnectionResponse>(`/v1/business/delivery/connections/${connection.provider}/disable`),
@@ -97,7 +174,10 @@ function ConnectionCard({ connection }: { connection: DeliveryConnectionResponse
               </div>
             )}
 
-            <div className="flex items-center gap-2 pt-2 border-t border-border">
+            {health && connection.status !== 'NOT_CONNECTED' && <HealthSummary health={health} />}
+
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
+              {canControlStore && <StoreStatusControl connection={connection} />}
               {connection.status === 'DISABLED' ? (
                 <Button
                   size="sm"
@@ -145,6 +225,15 @@ export default function DeliveryPlatformsPage() {
     enabled: deliveryEnabledConfirmed,
   });
 
+  // Best-effort: a failed health read never blocks the connection cards.
+  const { data: health } = useQuery({
+    queryKey: ['delivery-health'],
+    queryFn: () => apiClient.get<DeliveryProviderHealth[]>('/v1/business/delivery/health'),
+    enabled: deliveryEnabledConfirmed,
+    refetchInterval: 60_000,
+  });
+  const healthByProvider = new Map((health ?? []).map((h) => [h.provider, h]));
+
   if (settingsLoading) return <PageSkeleton />;
 
   if (!deliveryEnabledConfirmed) {
@@ -188,7 +277,7 @@ export default function DeliveryPlatformsPage() {
             activated_at: null, disconnected_at: null, error_reason: null, needs_attention: false,
             last_webhook_at: null, last_order_at: null, created_at: null, updated_at: null,
           };
-          return <ConnectionCard key={provider} connection={connection} />;
+          return <ConnectionCard key={provider} connection={connection} health={healthByProvider.get(provider)} />;
         })}
       </div>
     </div>

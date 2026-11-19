@@ -12,6 +12,9 @@ import {
   ShoppingCart, DollarSign, Users, Cpu, BarChart3, TrendingUp, Wallet, CreditCard, PieChart, Lock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SalesWalletsSection } from '@/components/analytics/SalesWalletsSection';
+import { BestSellersSection } from '@/components/analytics/BestSellersSection';
+import { VariantSalesSection } from '@/components/analytics/VariantSalesSection';
 import { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 
@@ -102,6 +105,13 @@ export default function AnalyticsPage() {
           ))}
         </div>
       </div>
+
+      {/* Sales Wallets and Best sellers: available on every plan (no Advanced
+          Analytics gate). Each has its own date filter, independent of the
+          period buttons above. */}
+      <SalesWalletsSection />
+      <BestSellersSection />
+      <VariantSalesSection />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total Orders" value={summary.totalOrders} icon={<ShoppingCart className="w-5 h-5" />} />

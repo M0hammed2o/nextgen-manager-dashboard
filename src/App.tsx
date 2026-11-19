@@ -19,6 +19,7 @@ import AnalyticsPage from "./pages/AnalyticsPage";
 import SettingsPage from "./pages/SettingsPage";
 import BillingPage from "./pages/BillingPage";
 import TillPage from "./pages/TillPage";
+import OfflineSalesReviewPage from "./pages/OfflineSalesReviewPage";
 import IngredientsPage from '@/pages/IngredientsPage';
 import RecipesPage from '@/pages/RecipesPage';
 import StockPage from '@/pages/StockPage';
@@ -38,6 +39,10 @@ import DeliveryPlatformsPage from '@/pages/DeliveryPlatformsPage';
 import DeliveryOrdersPage from '@/pages/DeliveryOrdersPage';
 import DeliveryMappingsPage from '@/pages/DeliveryMappingsPage';
 import ExportsPage from "./pages/ExportsPage";
+import EventRegisterPage from '@/pages/EventRegisterPage';
+import EventHomePage from '@/pages/EventHomePage';
+import EventDaysPage from '@/pages/EventDaysPage';
+import { RootRoute } from '@/components/RootRoute';
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -64,8 +69,11 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/events/:slug/register" element={<EventRegisterPage />} />
               <Route element={<DashboardLayout />}>
-                <Route path="/" element={<DashboardPage />} />
+                <Route path="/" element={<RootRoute />} />
+                <Route path="/event" element={<EventHomePage />} />
+                <Route path="/event/days" element={<EventDaysPage />} />
                 <Route path="/orders" element={<OrdersPage />} />
                 <Route path="/customers" element={<CustomersPage />} />
                 <Route path="/menu" element={<MenuPage />} />
@@ -75,6 +83,7 @@ const App = () => (
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/settings/billing" element={<BillingPage />} />
                 <Route path="/till" element={<TillPage />} />
+                <Route path="/offline-sales" element={<OfflineSalesReviewPage />} />
                 <Route path="/ingredients" element={<IngredientsPage />} />
                 <Route path="/recipes" element={<RecipesPage />} />
                 <Route path="/stock" element={<StockPage />} />

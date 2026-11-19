@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { VariantsSection } from '@/components/menu/VariantsSection';
 
 // ── Shared money helper ───────────────────────────────────────────────────────
 
@@ -1127,6 +1128,7 @@ function MenuItemForm({
         </div>
         <Switch checked={requiresPreparation} onCheckedChange={setRequiresPreparation} />
       </div>
+      {item && <VariantsSection itemId={item.id} itemName={item.name} />}
       {item && (
         <div className="flex items-center gap-2">
           <Switch checked={isAvailable} onCheckedChange={setIsAvailable} />
