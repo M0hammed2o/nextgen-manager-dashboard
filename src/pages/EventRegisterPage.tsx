@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { CalendarDays, CheckCircle2, Loader2, MapPin } from 'lucide-react';
+import { CalendarDays, Loader2, MailCheck, MapPin } from 'lucide-react';
 import { apiClient, ApiError } from '@/lib/api-client';
 import {
   type EventCategory, type PublicEvent, type RegisterRequest, type RegisterResponse,
@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/shared/PageComponents';
+import { ResendVerificationButton } from '@/components/shared/ResendVerificationButton';
 import logoNextgen from '@/assets/logo-nextgen.jpeg';
 
 /**
@@ -22,10 +23,14 @@ import logoNextgen from '@/assets/logo-nextgen.jpeg';
  * (`/events/:slug/register`). Reads GET /v1/public/events/{slug} and submits
  * POST /v1/public/events/{slug}/register.
  *
- * The backend deliberately answers a bad registration code, a duplicate
- * email and similar with ONE generic error each (403 REGISTRATION_REJECTED,
- * 409 REGISTRATION_FAILED) so the form can't be used to probe which codes or
- * emails exist. This page therefore never says WHY a registration failed.
+ * The backend deliberately answers a bad registration code and similar with
+ * ONE generic error (403 REGISTRATION_REJECTED). An email that already has an
+ * account gets exactly the same 202 "check your email" answer as a new one
+ * (the backend creates nothing and emails that address instead), so the form
+ * can't be used to probe which emails exist. This page therefore never says
+ * WHY a registration failed, and after any accepted registration it shows the
+ * same "Check your email" screen. The business code is no longer in the
+ * response; it arrives with the verification email and on /verify-email.
  * The password lives only in this component's state while the form is open
  * and is cleared on success; it is never persisted anywhere.
  */
@@ -80,7 +85,7 @@ function RegistrationBody({ event }: { event: PublicEvent }) {
   const billable = event.days.filter((d) => d.is_billable).map((d) => d.day).sort();
   const open = event.status === 'OPEN' && event.registration_open;
 
-  const [registered, setRegistered] = useState<RegisterResponse | null>(null);
+  const [registered, setRegistered] = useState<{ result: RegisterResponse; email: string } | null>(null);
 
   return (
     <>
@@ -117,7 +122,7 @@ function RegistrationBody({ event }: { event: PublicEvent }) {
       </Card>
 
       {registered ? (
-        <RegistrationSuccess result={registered} />
+        <CheckYourEmail result={registered.result} email={registered.email} />
       ) : !open ? (
         <Card>
           <CardHeader>
@@ -137,33 +142,30 @@ function RegistrationBody({ event }: { event: PublicEvent }) {
   );
 }
 
-function RegistrationSuccess({ result }: { result: RegisterResponse }) {
+function CheckYourEmail({ result, email }: { result: RegisterResponse; email: string }) {
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <CheckCircle2 className="h-5 w-5 text-success" /> You are registered
+          <MailCheck className="h-5 w-5 text-success" /> Check your email
         </CardTitle>
-        <CardDescription>
-          Log in with the email address and password you just chose.
+        <CardDescription data-testid="check-email">
+          If <strong className="break-all">{email}</strong> can be used, we have sent it a link to confirm your
+          email and finish registering. The link works once and expires in 24 hours.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="rounded-lg border bg-muted/40 p-4 text-center">
-          <p className="text-xs text-muted-foreground">Your business code</p>
-          <p className="mt-1 break-all font-mono text-2xl font-bold tracking-wider" data-testid="business-code">
-            {result.business_code}
-          </p>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Keep this code. NextGen will ask for it if you ever need support with your account.
-          </p>
-        </div>
+        <p className="text-sm text-muted-foreground">
+          You can log in and set up your stall before confirming, but you cannot record payments or sell until your
+          email is confirmed. Your business code is in the email too.
+        </p>
         <p className="text-sm" data-testid="login-opens">
           {result.login_opens_on
             ? <>You can log in from <strong>{formatDay(result.login_opens_on)}</strong>.</>
             : <>You can log in <strong>now</strong>.</>}
         </p>
-        <Button asChild className="w-full">
+        <ResendVerificationButton email={email} className="w-full" />
+        <Button asChild variant="secondary" className="w-full">
           <Link to="/login">Go to login</Link>
         </Button>
       </CardContent>
@@ -171,7 +173,10 @@ function RegistrationSuccess({ result }: { result: RegisterResponse }) {
   );
 }
 
-function RegistrationForm({ slug, onDone }: { slug: string; onDone: (r: RegisterResponse) => void }) {
+function RegistrationForm({ slug, onDone }: {
+  slug: string;
+  onDone: (r: { result: RegisterResponse; email: string }) => void;
+}) {
   const [registrationCode, setRegistrationCode] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [category, setCategory] = useState<EventCategory>('FOOD');
@@ -188,11 +193,11 @@ function RegistrationForm({ slug, onDone }: { slug: string; onDone: (r: Register
   const register = useMutation({
     mutationFn: (body: RegisterRequest) =>
       apiClient.post<RegisterResponse>(`/v1/public/events/${encodeURIComponent(slug)}/register`, body),
-    onSuccess: (data) => {
+    onSuccess: (data, body) => {
       // Drop the secrets before the success view replaces the form.
       setPassword('');
       setConfirm('');
-      onDone(data);
+      onDone({ result: data, email: body.owner_email });
     },
     onError: (err) => setError(registrationErrorMessage(err)),
   });

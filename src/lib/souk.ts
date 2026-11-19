@@ -52,11 +52,64 @@ export interface RegisterRequest {
   accept_terms: true;
 }
 
+/**
+ * The ONE answer to every registration that passes the code check, whether
+ * the email was new or already had an account (the backend creates nothing
+ * then, and emails the existing address instead). It carries no account data:
+ * the business code now arrives in the verification email and from
+ * POST /v1/public/auth/verify-email.
+ */
 export interface RegisterResponse {
-  business_code: string;
-  next: 'login';
+  status: 'verification_pending';
+  next: 'check_email';
+  message: string;
   access_level: AccessLevel;
   login_opens_on: string | null;
+}
+
+// ---- email verification (public, unauthenticated) ----------------------------
+
+export interface VerifyEmailResponse {
+  verified: true;
+  next: 'login';
+  business_code: string | null;
+}
+
+/** Same body whatever happened server-side (unknown email, verified, throttled, sent). */
+export interface ResendVerificationResponse {
+  status: 'accepted';
+  message: string;
+}
+
+/** Client-side cooldown between resend clicks; mirrors the backend's per-email 60 s cooldown. */
+export const RESEND_COOLDOWN_SECONDS = 60;
+
+export interface EmailVerificationStatus {
+  required: boolean;
+  verified: boolean;
+}
+
+/**
+ * Raw token from a verification link. The backend puts it in the URL
+ * fragment (`/verify-email#token=...`) so it never reaches a server log;
+ * `?token=` is accepted as a fallback for mail clients that mangle fragments.
+ */
+export function tokenFromLocation(hash: string, search: string): string | null {
+  const fromHash = new URLSearchParams(hash.replace(/^#/, '')).get('token');
+  const fromQuery = new URLSearchParams(search).get('token');
+  const token = (fromHash || fromQuery || '').trim();
+  return token || null;
+}
+
+/** Generic text for a failed verification: invalid, expired and used links look the same on purpose. */
+export function verifyErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 429) return 'Too many attempts. Please wait a minute and try again.';
+    if (err.status === 400 || err.status === 422) {
+      return 'This verification link is invalid or has expired. Request a new one below.';
+    }
+  }
+  return 'We could not check your link. Check your connection and try again.';
 }
 
 // ---- vendor plane ------------------------------------------------------------
@@ -92,6 +145,8 @@ export interface EventAccess {
   access_level: AccessLevel | null;
   reason: string | null;
   events: EventAccessEvent[];
+  /** Absent on an older backend; treat as "not required". */
+  email_verification?: EmailVerificationStatus;
 }
 
 export interface EventSubscription {
@@ -192,6 +247,8 @@ export function describeAccessReason(reason: string | null | undefined): string 
       return 'Today is an event day, but you have no paid subscription covering it.';
     case 'NO_EVENT':
       return 'This business is not registered for an event.';
+    case 'EMAIL_NOT_VERIFIED':
+      return 'Today is paid for, but selling stays closed until you confirm your email address.';
     default:
       return reason ? reason.replace(/_/g, ' ').toLowerCase() : '';
   }
@@ -209,6 +266,8 @@ export function subscriptionErrorMessage(err: unknown, fallback: string): string
         return 'That range has no billable event day. Pick at least one event day.';
       case 'PAYMENT_REFERENCE_USED':
         return 'That payment reference is already used on another paid subscription. Check the reference on your bank statement.';
+      case 'EMAIL_NOT_VERIFIED':
+        return 'Confirm your email address first. Use the link we emailed you, or resend it from the banner above.';
       case 'SUBSCRIPTION_NOT_UNPAID':
         return 'This subscription is no longer unpaid, so it cannot be changed here. Refresh to see its current state.';
       default:
