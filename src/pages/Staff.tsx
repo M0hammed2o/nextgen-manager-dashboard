@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { PageHeader, PageSkeleton, EmptyState } from '@/components/shared/PageComponents';
+import { StoreCodeCard } from '@/components/shared/StoreCodeCard';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -89,6 +90,8 @@ export default function StaffPage() {
           <Plus className="w-4 h-4" /> Add Staff
         </Button>
       </div>
+
+      <StoreCodeCard />
 
       {staff.length === 0 ? (
         <EmptyState
