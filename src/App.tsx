@@ -40,6 +40,7 @@ import DeliveryOrdersPage from '@/pages/DeliveryOrdersPage';
 import DeliveryMappingsPage from '@/pages/DeliveryMappingsPage';
 import ExportsPage from "./pages/ExportsPage";
 import EventRegisterPage from '@/pages/EventRegisterPage';
+import VerifyEmailPage from '@/pages/VerifyEmailPage';
 import EventHomePage from '@/pages/EventHomePage';
 import EventDaysPage from '@/pages/EventDaysPage';
 import { RootRoute } from '@/components/RootRoute';
@@ -70,6 +71,7 @@ const App = () => (
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/events/:slug/register" element={<EventRegisterPage />} />
+              <Route path="/verify-email" element={<VerifyEmailPage />} />
               <Route element={<DashboardLayout />}>
                 <Route path="/" element={<RootRoute />} />
                 <Route path="/event" element={<EventHomePage />} />

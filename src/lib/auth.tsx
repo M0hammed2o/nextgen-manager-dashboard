@@ -97,6 +97,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** The auth context or null outside an AuthProvider (for components that only read the user if present). */
+export function useOptionalAuth() {
+  return useContext(AuthContext) ?? null;
+}
+
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
