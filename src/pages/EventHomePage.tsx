@@ -11,6 +11,7 @@ import { EmptyState, ErrorState, PageHeader, PageSkeleton } from '@/components/s
 import { EventAccessBanner } from '@/components/shared/EventAccessBanner';
 import { EmailVerificationBanner } from '@/components/shared/EmailVerificationBanner';
 import { useOptionalAuth } from '@/lib/auth';
+import { EventWhatsAppCard } from '@/components/shared/EventWhatsAppCard';
 
 type StepStatus = 'done' | 'partial' | 'todo' | 'manual';
 
@@ -212,6 +213,9 @@ export default function EventHomePage() {
           </li>
         ))}
       </ol>
+
+      {/* Optional, so not counted in the checklist progress above. */}
+      {data.whatsapp && <EventWhatsAppCard whatsapp={data.whatsapp} />}
     </div>
   );
 }
