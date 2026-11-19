@@ -12,6 +12,7 @@ import { EventAccessBanner } from '@/components/shared/EventAccessBanner';
 import { EmailVerificationBanner } from '@/components/shared/EmailVerificationBanner';
 import { useOptionalAuth } from '@/lib/auth';
 import { EventWhatsAppCard } from '@/components/shared/EventWhatsAppCard';
+import { StoreCodeCard } from '@/components/shared/StoreCodeCard';
 
 type StepStatus = 'done' | 'partial' | 'todo' | 'manual';
 
@@ -134,7 +135,7 @@ export default function EventHomePage() {
     },
     fromSetup('menu', isClothing ? 'Catalogue' : 'Menu', menuStep, '/menu',
       isClothing ? 'The items you sell and their prices.' : 'The items you sell and their prices.', 'Open menu',
-      isClothing ? 'Sizes and colours as variants are coming soon; for now add each size or colour as its own item.' : undefined),
+      isClothing ? 'Add each style once, then add its sizes and colours from the item: each size and colour gets its own stock and barcode.' : undefined),
     ...stockSteps.map((s) => ({
       key: s!.key, label: s!.label, description: s!.description, detail: s!.detail,
       status: s!.status as StepStatus, href: s!.href ?? '/stock', actionLabel: 'Open',
@@ -163,6 +164,8 @@ export default function EventHomePage() {
       <EventAccessBanner level={data.access_level} reason={data.reason} />
 
       {data.events.map((e) => <EventSummary key={e.event_id} event={e} />)}
+
+      <StoreCodeCard />
 
       <Card>
         <CardContent className="py-5">

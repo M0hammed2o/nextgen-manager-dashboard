@@ -161,6 +161,11 @@ export interface OrderItem {
   // unused by this app today.
   selected_options_snapshot: Array<{ group_name: string; option_name: string; price_delta_cents: number }> | null;
   special_instructions: string | null;
+  // Product variants (backend migration 0066) — optional so older payloads still type-check.
+  variant_id?: string | null;
+  variant_label_snapshot?: string | null;
+  /** Units of this line already returned through a line-level refund. */
+  returned_quantity?: number | null;
 }
 
 // Backend Order.payment_status — the full set the model actually writes
@@ -474,6 +479,8 @@ export interface BusinessSettings {
   pos_direct_eft_enabled: boolean;
   pos_other_payment_enabled: boolean;
   pos_table_number_required: boolean;
+  /** Largest POS discount (cents) a STAFF/MANAGER may give without the owner; 0 = none. OWNER-only to change. */
+  max_staff_discount_cents?: number;
   // Staff app navigation — which tabs this tenant's bottom bar shows. These
   // hide tabs only; the underlying features and their APIs are untouched.
   staff_live_orders_tab_enabled: boolean;

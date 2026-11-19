@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { VariantsSection } from './VariantsSection';
+import { VariantsSection, parseStockChange } from './VariantsSection';
 import { apiClient, ApiError } from '@/lib/api-client';
 import type { Variant } from '@/lib/variants';
 
@@ -134,5 +134,48 @@ describe('VariantsSection', () => {
     await waitFor(() => expect(toastSpy).toHaveBeenCalledWith(expect.objectContaining({
       description: expect.stringMatching(/same SKU/),
     })));
+  });
+
+  it('adjusts one tracked variant stock via the audited adjustments endpoint (e2e: stock not editable after creation)', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue([
+      variant(),
+      variant({ id: 'v2', sku: 'TEE-L-RED', label: 'L / Red', ingredient_id: null, stock_on_hand: null }),
+    ] as never);
+    vi.mocked(apiClient.post).mockResolvedValue({} as never);
+    renderSection();
+    await screen.findByText('M / Black');
+    // Untracked variants have nothing to adjust.
+    expect(screen.queryByRole('button', { name: 'Adjust stock for L / Red' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Adjust stock for M / Black' }));
+    const change = screen.getByLabelText(/Change in units/);
+    fireEvent.change(change, { target: { value: '-9' } });
+    expect(screen.getByText(/would leave -2 in stock/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Update stock' })).toBeDisabled();
+    fireEvent.change(change, { target: { value: '5' } });
+    expect(screen.getByTestId('stock-preview-TEE-M-BLACK')).toHaveTextContent('7 → 12 in stock');
+    fireEvent.click(screen.getByRole('button', { name: 'Update stock' }));
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/v1/business/inventory/adjustments', {
+      ingredient_id: 'ing', quantity: '5', unit: 'unit', reason: 'Stock count correction',
+    }));
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledWith(expect.objectContaining({ title: 'Stock updated' })));
+  });
+
+  it('explains when inventory is not switched on', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue([variant()] as never);
+    vi.mocked(apiClient.post).mockRejectedValue(new ApiError('off', 409, 'INVENTORY_NOT_ENABLED') as never);
+    renderSection();
+    fireEvent.click(await screen.findByRole('button', { name: 'Adjust stock for M / Black' }));
+    fireEvent.change(screen.getByLabelText(/Change in units/), { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Update stock' }));
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Could not update stock', description: expect.stringMatching(/is not switched on for this business/),
+    })));
+  });
+
+  it('parseStockChange accepts signed whole numbers only', () => {
+    expect(parseStockChange('5')).toBe(5);
+    expect(parseStockChange('+3')).toBe(3);
+    expect(parseStockChange('-2')).toBe(-2);
+    for (const bad of ['', '0', '1.5', 'abc', '--1']) expect(parseStockChange(bad)).toBeNull();
   });
 });

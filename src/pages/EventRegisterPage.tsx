@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { CalendarDays, Loader2, MailCheck, MapPin } from 'lucide-react';
 import { apiClient, ApiError } from '@/lib/api-client';
 import {
   type EventCategory, type PublicEvent, type RegisterRequest, type RegisterResponse,
-  formatDay, passwordProblem, registrationErrorMessage,
+  formatDay, loginOpensLater, passwordProblem, registrationErrorMessage,
 } from '@/lib/souk';
 import { formatCents } from '@/lib/mappers';
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,17 @@ import logoNextgen from '@/assets/logo-nextgen.jpeg';
  * The password lives only in this component's state while the form is open
  * and is cleared on success; it is never persisted anywhere.
  */
+
+/**
+ * `/events/:slug` has no page of its own: the registration page is the public
+ * event page (it shows the event's dates, venue and prices above the form), so
+ * send the bare link there instead of to Not Found. Keeps any query string.
+ */
+export function EventSlugRedirect() {
+  const { slug = '' } = useParams<{ slug: string }>();
+  const { search } = useLocation();
+  return <Navigate to={`/events/${encodeURIComponent(slug)}/register${search}`} replace />;
+}
 
 export default function EventRegisterPage() {
   const { slug = '' } = useParams<{ slug: string }>();
@@ -143,6 +154,7 @@ function RegistrationBody({ event }: { event: PublicEvent }) {
 }
 
 function CheckYourEmail({ result, email }: { result: RegisterResponse; email: string }) {
+  const opensOn = loginOpensLater(result.login_opens_on);
   return (
     <Card>
       <CardHeader>
@@ -160,8 +172,8 @@ function CheckYourEmail({ result, email }: { result: RegisterResponse; email: st
           email is confirmed. Your business code is in the email too.
         </p>
         <p className="text-sm" data-testid="login-opens">
-          {result.login_opens_on
-            ? <>You can log in from <strong>{formatDay(result.login_opens_on)}</strong>.</>
+          {opensOn
+            ? <>You can log in from <strong>{formatDay(opensOn)}</strong>.</>
             : <>You can log in <strong>now</strong>.</>}
         </p>
         <ResendVerificationButton email={email} className="w-full" />
@@ -297,12 +309,15 @@ function RegistrationForm({ slug, onDone }: {
             {mismatch && <p className="text-xs text-destructive">The two passwords do not match.</p>}
           </div>
 
-          <div className="flex items-start gap-3">
-            <Checkbox id="reg-terms" checked={accepted} onCheckedChange={(v) => setAccepted(v === true)} className="mt-0.5" />
-            <Label htmlFor="reg-terms" className="text-sm font-normal leading-snug">
-              I accept the NextGen terms of use for event vendors.
-            </Label>
-          </div>
+          {/* The whole row is the tap target (at least 44px high), not just the 16px box. */}
+          <Label
+            htmlFor="reg-terms"
+            data-testid="reg-terms-row"
+            className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm font-normal leading-snug ${accepted ? 'border-primary bg-primary/5' : ''}`}
+          >
+            <Checkbox id="reg-terms" checked={accepted} onCheckedChange={(v) => setAccepted(v === true)} className="h-6 w-6 flex-none" />
+            <span>I accept the NextGen terms of use for event vendors.</span>
+          </Label>
 
           <Button type="submit" className="h-11 w-full" disabled={!canSubmit}>
             {register.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Register'}

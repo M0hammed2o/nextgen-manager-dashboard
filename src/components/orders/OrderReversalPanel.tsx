@@ -77,6 +77,12 @@ export default function OrderReversalPanel({
   const [restoreStock, setRestoreStock] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingProviderRefund, setConfirmingProviderRefund] = useState(false);
+  // Line-level return (POS orders with size/colour variant lines): which
+  // units came back, by order line. Same API the staff till uses
+  // (POST /pos/orders/{id}/refund with return_items); the backend prices the
+  // returned units itself, sharing out any order discount.
+  const [refundKind, setRefundKind] = useState<'amount' | 'items'>('amount');
+  const [returnQty, setReturnQty] = useState<Record<string, number>>({});
   const [providerError, setProviderError] = useState<string | null>(null);
 
   const isManager = role === 'OWNER' || role === 'MANAGER';
@@ -94,6 +100,20 @@ export default function OrderReversalPanel({
 
   const remainingCents = order.total_cents - (order.refund_amount_cents ?? 0);
 
+  const returnableLines = isPos
+    ? order.items
+      .map((it) => ({ item: it, left: it.quantity - (it.returned_quantity ?? 0) }))
+      .filter((l) => l.left > 0)
+    : [];
+  const canReturnItems = isPos && order.items.some((it) => !!it.variant_id) && returnableLines.length > 0;
+  const returningItems = canReturnItems && refundKind === 'items';
+  const chosenReturns = Object.entries(returnQty).filter(([, q]) => q > 0);
+  // Indicative only (list price); the backend's figure is authoritative.
+  const returnListValueCents = chosenReturns.reduce((sum, [id, q]) => {
+    const it = order.items.find((i) => i.id === id);
+    return sum + (it ? it.unit_price_cents * q : 0);
+  }, 0);
+
   // A partial refund of a split order mixing cash and non-cash is the one
   // shape where the backend refuses to guess the cash portion
   // (CASH_REFUND_PORTION_REQUIRED). Every other shape — any full refund, or a
@@ -105,18 +125,24 @@ export default function OrderReversalPanel({
   const parsedAmountCents = parseRandsToCents(amountInput);
   const isPartialAmount =
     parsedAmountCents !== null && parsedAmountCents > 0 && parsedAmountCents < order.total_cents;
-  const needsCashPortion = isPos && isPartialAmount && (mixedCashSplit || forceCashPortion);
+  const needsCashPortion = returningItems
+    ? (mixedCashSplit || forceCashPortion)
+    : isPos && isPartialAmount && (mixedCashSplit || forceCashPortion);
 
   const refundMutation = useMutation({
     mutationFn: async (body: {
-      amount_cents: number;
+      amount_cents?: number;
       reason: string;
       restore_stock?: boolean;
       cash_refund_cents?: number;
+      return_items?: Array<{ order_item_id: string; quantity: number }>;
     }) => {
       if (isPos) {
         return apiClient.post<Order>(`/v1/business/pos/orders/${order.id}/refund`, {
-          amount_cents: body.amount_cents,
+          // Omitted on a line return without an override: the backend then
+          // refunds exactly the returned units' value.
+          ...(body.amount_cents !== undefined ? { amount_cents: body.amount_cents } : {}),
+          ...(body.return_items ? { return_items: body.return_items } : {}),
           reason: body.reason,
           restore_stock: body.restore_stock ?? false,
           // Only sent when it was actually collected — the backend computes
@@ -152,6 +178,14 @@ export default function OrderReversalPanel({
           return 'The cash part of this refund cannot be more than the refund amount, or more than this order was paid in cash.';
         case 'NO_PENDING_PROVIDER_REFUND':
           return 'This Pay-by-Link refund has already been marked as completed.';
+        case 'RETURN_EXCEEDS_SOLD':
+          return 'You chose more units than are left to return on that line. Refresh the order and try again.';
+        case 'REFUND_EXCEEDS_RETURNED_VALUE':
+          return `The refund cannot be more than the returned items are worth. ${err.message}`;
+        case 'RETURN_ITEMS_REQUIRED':
+          return 'To put size/colour stock back on a partial refund, choose "Return items" and pick which units came back.';
+        case 'RETURN_AMOUNT_ZERO':
+          return 'The returned items have no refundable value.';
       }
       return err.message;
     }
@@ -300,6 +334,8 @@ export default function OrderReversalPanel({
     setCashInput('');
     setForceCashPortion(false);
     setRestoreStock(false);
+    setRefundKind('amount');
+    setReturnQty({});
     setError(null);
   }
 
@@ -307,6 +343,76 @@ export default function OrderReversalPanel({
     setMode('refund');
     setAmountInput(centsToRandsInput(remainingCents));
     setError(null);
+  }
+
+  function chooseRefundKind(kind: 'amount' | 'items') {
+    setRefundKind(kind);
+    setError(null);
+    // A line return defaults to the returned goods' value; an amount refund
+    // to everything still refundable.
+    setAmountInput(kind === 'items' ? '' : centsToRandsInput(remainingCents));
+  }
+
+  async function submitLineReturn() {
+    if (!reason.trim()) {
+      setError('Give a reason — it appears on the audit trail.');
+      return;
+    }
+    if (chosenReturns.length === 0) {
+      setError('Choose at least one item that came back.');
+      return;
+    }
+    let overrideCents: number | undefined;
+    if (amountInput.trim() !== '') {
+      const parsed = parseRandsToCents(amountInput);
+      if (parsed === null || parsed <= 0) {
+        setError('Enter a valid amount in rands (e.g. 150.00), or leave it blank to refund the value of the items.');
+        return;
+      }
+      if (parsed > remainingCents) {
+        setError(`Refund amount cannot exceed ${formatCents(remainingCents)}.`);
+        return;
+      }
+      overrideCents = parsed;
+    }
+    let cashRefundCents: number | undefined;
+    if (needsCashPortion) {
+      const cash = parseRandsToCents(cashInput);
+      if (cash === null) {
+        setError('Enter how much of this refund is being returned in cash (enter 0 if none of it is cash).');
+        return;
+      }
+      if (mixedCashSplit && cash > cashAllocated) {
+        setError(`The cash part cannot be more than this order was paid in cash (${formatCents(cashAllocated)}).`);
+        return;
+      }
+      cashRefundCents = cash;
+    }
+    setError(null);
+    try {
+      const result = await refundMutation.mutateAsync({
+        amount_cents: overrideCents,
+        reason: reason.trim(),
+        restore_stock: restoreStock,
+        cash_refund_cents: cashRefundCents,
+        return_items: chosenReturns.map(([order_item_id, quantity]) => ({ order_item_id, quantity })),
+      });
+      const updated = (result as Order | undefined) ?? null;
+      const refunded = updated?.refund_amount_cents != null
+        ? updated.refund_amount_cents - (order.refund_amount_cents ?? 0)
+        : null;
+      const units = chosenReturns.reduce((n, [, q]) => n + q, 0);
+      finishReversal(
+        updated,
+        'Return recorded',
+        `${units} item${units === 1 ? '' : 's'} returned${refunded !== null && refunded > 0 ? `, ${formatCents(refunded)} refunded` : ''}${restoreStock ? ', back in stock' : ''}.`,
+      );
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'CASH_REFUND_PORTION_REQUIRED') {
+        setForceCashPortion(true);
+      }
+      setError(friendlyError(err));
+    }
   }
 
   function openVoid() {
@@ -472,14 +578,67 @@ export default function OrderReversalPanel({
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="space-y-3">
+              {canReturnItems && (
+                <fieldset className="space-y-1.5">
+                  <legend className="text-sm font-medium">What is being refunded?</legend>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([['amount', 'An amount'], ['items', 'Return items']] as const).map(([k, label]) => (
+                      <label
+                        key={k}
+                        className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-md border p-2 text-sm ${refundKind === k ? 'border-primary bg-primary/5' : 'border-border'}`}
+                      >
+                        <input
+                          type="radio" name="refund-kind" value={k} checked={refundKind === k}
+                          onChange={() => chooseRefundKind(k)} className="h-4 w-4"
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
+              {returningItems && (
+                <div className="space-y-1.5" data-testid="return-lines">
+                  <p className="text-xs text-muted-foreground">How many of each came back?</p>
+                  <ul className="space-y-1.5">
+                    {returnableLines.map(({ item, left }) => (
+                      <li key={item.id} className="flex items-center justify-between gap-2 rounded-md border border-border p-2 text-sm">
+                        <span className="min-w-0">
+                          <span className="font-medium">{item.name_snapshot}</span>
+                          {item.variant_label_snapshot ? <span className="text-muted-foreground"> · {item.variant_label_snapshot}</span> : null}
+                          <span className="block text-xs text-muted-foreground">
+                            {formatCents(item.unit_price_cents)} each · {left} of {item.quantity} left to return
+                          </span>
+                        </span>
+                        <Input
+                          type="number" min={0} max={left} step={1} inputMode="numeric" className="h-9 w-20 shrink-0"
+                          aria-label={`Units of ${item.name_snapshot}${item.variant_label_snapshot ? ` ${item.variant_label_snapshot}` : ''} returned`}
+                          value={returnQty[item.id] ?? 0}
+                          onChange={(e) => {
+                            const n = Math.max(0, Math.min(left, Math.trunc(Number(e.target.value) || 0)));
+                            setReturnQty((prev) => ({ ...prev, [item.id]: n }));
+                          }}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                  {returnListValueCents > 0 && (
+                    <p className="text-xs text-muted-foreground" data-testid="return-value">
+                      About {formatCents(returnListValueCents)} at list price. The exact refund is worked out from what the
+                      customer paid (discounts shared out).
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="space-y-1.5">
-                <Label htmlFor="refund-amount">Amount (R)</Label>
+                <Label htmlFor="refund-amount">{returningItems ? 'Refund less than the value of the items (optional, R)' : 'Amount (R)'}</Label>
                 <Input
                   id="refund-amount"
                   inputMode="decimal"
                   value={amountInput}
                   onChange={(e) => setAmountInput(e.target.value)}
-                  autoFocus
+                  placeholder={returningItems ? 'Leave blank for the full value' : undefined}
+                  autoFocus={!returningItems}
                 />
                 <p className="text-xs text-muted-foreground">
                   Up to {formatCents(remainingCents)} refundable.
@@ -523,9 +682,13 @@ export default function OrderReversalPanel({
                     className="mt-0.5 h-4 w-4"
                   />
                   <span className="text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">Put the items back into stock</span>
+                    <span className="font-medium text-foreground">
+                      {returningItems ? 'Put the returned items back into stock' : 'Put the items back into stock'}
+                    </span>
                     <br />
-                    Only tick this if the food was never made or can be resold.
+                    {returningItems
+                      ? 'Tick this if the returned items can be sold again.'
+                      : 'Only tick this if the food was never made or can be resold.'}
                   </span>
                 </label>
               )}
@@ -536,7 +699,7 @@ export default function OrderReversalPanel({
               <AlertDialogAction
                 disabled={busy}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={(e) => { e.preventDefault(); submitRefund(); }}
+                onClick={(e) => { e.preventDefault(); if (returningItems) submitLineReturn(); else submitRefund(); }}
               >
                 {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Refund

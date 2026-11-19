@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import EventRegisterPage from './EventRegisterPage';
+import EventRegisterPage, { EventSlugRedirect } from './EventRegisterPage';
 import { apiClient, ApiError } from '@/lib/api-client';
 
 vi.mock('@/lib/api-client', async () => {
@@ -32,16 +32,17 @@ const EVENT = {
 
 const ACCEPTED = {
   status: 'verification_pending', next: 'check_email', message: 'Check your email to continue.',
-  access_level: 'NONE', login_opens_on: '2026-12-02',
+  access_level: 'NONE', login_opens_on: '2099-12-02',
 };
 
-function renderPage() {
+function renderPage(path = '/events/summer-souk/register') {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={['/events/summer-souk/register']}>
+      <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/events/:slug/register" element={<EventRegisterPage />} />
+          <Route path="/events/:slug" element={<EventSlugRedirect />} />
           <Route path="/login" element={<p>login page</p>} />
         </Routes>
       </MemoryRouter>
@@ -88,7 +89,7 @@ describe('EventRegisterPage', () => {
     expect(await screen.findByText('Check your email')).toBeInTheDocument();
     expect(screen.getByTestId('check-email')).toHaveTextContent('thandi@example.com');
     expect(screen.queryByTestId('business-code')).not.toBeInTheDocument();
-    expect(screen.getByTestId('login-opens')).toHaveTextContent(/2 Dec 2026/);
+    expect(screen.getByTestId('login-opens')).toHaveTextContent(/2 Dec 2099/);
     expect(screen.getByRole('link', { name: 'Go to login' })).toHaveAttribute('href', '/login');
     expect(screen.getByRole('button', { name: /Resend verification email/ })).toBeEnabled();
 
@@ -105,6 +106,13 @@ describe('EventRegisterPage', () => {
     expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
   });
 
+  it('sends the bare /events/<slug> link to the event registration page instead of Not Found', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue(EVENT as never);
+    renderPage('/events/summer-souk');
+    expect(await screen.findByText('Durban Summer Souk')).toBeInTheDocument();
+    expect(apiClient.get).toHaveBeenCalledWith('/v1/public/events/summer-souk');
+  });
+
   it('says "now" when login_opens_on is null', async () => {
     vi.mocked(apiClient.get).mockResolvedValue(EVENT as never);
     vi.mocked(apiClient.post).mockResolvedValue({ ...ACCEPTED, access_level: 'CONFIGURE', login_opens_on: null } as never);
@@ -112,6 +120,16 @@ describe('EventRegisterPage', () => {
     await fillForm();
     fireEvent.click(screen.getByRole('button', { name: 'Register' }));
     expect(await screen.findByTestId('login-opens')).toHaveTextContent(/log in now/);
+  });
+
+  it('says "now" (never a past date) when an older backend sends a login day that has passed', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue(EVENT as never);
+    vi.mocked(apiClient.post).mockResolvedValue({ ...ACCEPTED, access_level: 'CONFIGURE', login_opens_on: '2020-01-01' } as never);
+    renderPage();
+    await fillForm();
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }));
+    expect(await screen.findByTestId('login-opens')).toHaveTextContent(/log in now/);
+    expect(screen.getByTestId('login-opens')).not.toHaveTextContent(/2020/);
   });
 
   it('resends the verification email for the address typed, then counts down before allowing another', async () => {
@@ -175,6 +193,20 @@ describe('EventRegisterPage', () => {
     expect(screen.getByText(/72 bytes/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Register' }));
     expect(apiClient.post).not.toHaveBeenCalled();
+  });
+
+  it('makes the whole terms row a 44px tap target that toggles the checkbox (e2e: 16x16 box)', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue(EVENT as never);
+    renderPage();
+    const row = await screen.findByTestId('reg-terms-row');
+    expect(row.className).toContain('min-h-11');
+    const box = screen.getByRole('checkbox', { name: /I accept the NextGen terms/ });
+    expect(box.className).toContain('h-6');
+    expect(box).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(row);
+    expect(box).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(screen.getByText(/I accept the NextGen terms/));
+    expect(box).toHaveAttribute('aria-checked', 'false');
   });
 
   it('keeps Register disabled until the terms are accepted', async () => {

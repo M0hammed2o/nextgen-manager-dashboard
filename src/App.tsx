@@ -39,7 +39,7 @@ import DeliveryPlatformsPage from '@/pages/DeliveryPlatformsPage';
 import DeliveryOrdersPage from '@/pages/DeliveryOrdersPage';
 import DeliveryMappingsPage from '@/pages/DeliveryMappingsPage';
 import ExportsPage from "./pages/ExportsPage";
-import EventRegisterPage from '@/pages/EventRegisterPage';
+import EventRegisterPage, { EventSlugRedirect } from '@/pages/EventRegisterPage';
 import VerifyEmailPage from '@/pages/VerifyEmailPage';
 import EventHomePage from '@/pages/EventHomePage';
 import EventDaysPage from '@/pages/EventDaysPage';
@@ -71,6 +71,7 @@ const App = () => (
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/events/:slug/register" element={<EventRegisterPage />} />
+              <Route path="/events/:slug" element={<EventSlugRedirect />} />
               <Route path="/verify-email" element={<VerifyEmailPage />} />
               <Route element={<DashboardLayout />}>
                 <Route path="/" element={<RootRoute />} />

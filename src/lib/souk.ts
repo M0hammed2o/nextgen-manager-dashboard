@@ -15,12 +15,16 @@ export type AccessLevel = 'NONE' | 'CONFIGURE' | 'TRADE';
 export type SubscriptionStatus = 'UNPAID' | 'PAID' | 'VOID';
 
 /**
- * PLACEHOLDER — NextGen's EFT instructions for event-day payments. No real
- * bank details are baked into the app: replace this text (or wire it to a
- * server-provided value) before go-live.
+ * What the "How to pay" card says while no bank details are configured. No
+ * bank details are baked into the app, and none come from the server: the
+ * backend's NEXTGEN_BANK_* settings are documented (config.py) as printed only
+ * inside issued invoice PDFs, never in an API response, so exposing them to
+ * vendors is an owner decision, not a UI fix. Until then the vendor is told
+ * plainly that the details are not configured and who to ask, instead of the
+ * raw "[PLACEHOLDER: ...]" text the e2e run found.
  */
-export const EFT_INSTRUCTIONS_PLACEHOLDER =
-  'EFT details are shared by the NextGen events team. [PLACEHOLDER: bank name, account number, branch code and payment instructions to be supplied before launch.]';
+export const EFT_DETAILS_NOT_CONFIGURED =
+  'Bank details are not yet configured. Contact the event organiser for the EFT details before you pay.';
 
 // ---- public registration ---------------------------------------------------
 
@@ -204,6 +208,18 @@ export interface EventSubscriptionsResponse {
 export function parseIsoDay(iso: string): Date {
   const [y, m, d] = iso.split('-').map(Number);
   return new Date(y, (m || 1) - 1, d || 1, 12);
+}
+
+/**
+ * The day login opens, or null when it is today or earlier. The backend sends
+ * null once login is open; this also guards an older backend that sent the
+ * (past) first-billable-day-minus-prep date regardless.
+ */
+export function loginOpensLater(iso: string | null | undefined, today: Date = new Date()): string | null {
+  if (!iso) return null;
+  const opens = parseIsoDay(iso);
+  const t = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12);
+  return opens.getTime() > t.getTime() ? iso : null;
 }
 
 export function formatDay(iso: string | null | undefined, opts?: { weekday?: boolean }): string {

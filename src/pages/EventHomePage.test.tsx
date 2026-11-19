@@ -45,7 +45,7 @@ function mockApi(acc: ReturnType<typeof access>, subs: unknown = { events: [] })
   vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
     if (url === '/v1/business/event-access') return acc as never;
     if (url === '/v1/business/setup/progress') return SETUP as never;
-    if (url === '/v1/business/settings') return { name: 'Tasty Bites', logo_url: null } as never;
+    if (url === '/v1/business/settings') return { name: 'Tasty Bites', logo_url: null, business_code: 'TB7Q2X' } as never;
     if (url === '/v1/business/event-subscriptions') return subs as never;
     throw new Error(`unexpected GET ${url}`);
   });
@@ -104,15 +104,23 @@ describe('EventHomePage', () => {
   it('shows the clothing note about sizes and colours only for a clothing vendor', async () => {
     mockApi(access('CONFIGURE', 'PREP_WINDOW', true, 'CLOTHING'));
     renderAt(<EventHomePage />);
-    expect(await screen.findByText(/Sizes and colours as variants are coming soon/)).toBeInTheDocument();
+    expect(await screen.findByText(/add its sizes and colours from the item/)).toBeInTheDocument();
+    expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument();
     expect(screen.getByText('Catalogue')).toBeInTheDocument();
+  });
+
+  it("shows the vendor's own store code for the staff app (e2e: admin-onboarded vendors never saw it)", async () => {
+    mockApi(access('CONFIGURE', 'PREP_WINDOW'));
+    renderAt(<EventHomePage />);
+    expect(await screen.findByTestId('store-code')).toHaveTextContent('TB7Q2X');
+    expect(screen.getByText('Store code for the staff app')).toBeInTheDocument();
   });
 
   it('does not show the clothing note for a food vendor', async () => {
     mockApi(access('CONFIGURE', 'PREP_WINDOW'));
     renderAt(<EventHomePage />);
     await screen.findByText('Choose your event days');
-    expect(screen.queryByText(/Sizes and colours/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/sizes and colours/i)).not.toBeInTheDocument();
   });
 
   it('marks days and payment from the subscriptions', async () => {
