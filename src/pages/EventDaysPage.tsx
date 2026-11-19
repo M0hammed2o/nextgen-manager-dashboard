@@ -24,6 +24,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { EmptyState, ErrorState, PageHeader, PageSkeleton } from '@/components/shared/PageComponents';
 import { EventAccessBanner } from '@/components/shared/EventAccessBanner';
+import { EmailVerificationBanner } from '@/components/shared/EmailVerificationBanner';
+import { useOptionalAuth } from '@/lib/auth';
 
 /**
  * Event days & payment (souk vendor). The vendor picks a contiguous range of
@@ -35,6 +37,7 @@ import { EventAccessBanner } from '@/components/shared/EventAccessBanner';
 export default function EventDaysPage() {
   const subs = useEventSubscriptions();
   const access = useEventAccess();
+  const auth = useOptionalAuth();
 
   if (subs.isLoading) return <PageSkeleton />;
   if (subs.error || !subs.data) {
@@ -52,6 +55,9 @@ export default function EventDaysPage() {
     <div className="space-y-6">
       <PageHeader title="Event days and payment" description="Choose the days you will trade, then pay for them." />
 
+      {access.data?.is_event_vendor && (
+        <EmailVerificationBanner status={access.data.email_verification} email={auth?.user?.email} />
+      )}
       {access.data?.is_event_vendor && <EventAccessBanner level={access.data.access_level} reason={access.data.reason} />}
 
       {events.length === 0 ? (

@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { EmptyState, ErrorState, PageHeader, PageSkeleton } from '@/components/shared/PageComponents';
 import { EventAccessBanner } from '@/components/shared/EventAccessBanner';
+import { EmailVerificationBanner } from '@/components/shared/EmailVerificationBanner';
+import { useOptionalAuth } from '@/lib/auth';
 
 type StepStatus = 'done' | 'partial' | 'todo' | 'manual';
 
@@ -79,6 +81,7 @@ export default function EventHomePage() {
   const setup = useSetupProgress();
   const settings = useBusinessSettings();
   const subs = useEventSubscriptions();
+  const auth = useOptionalAuth();
 
   if (access.isLoading) return <PageSkeleton />;
   if (access.error || !access.data) {
@@ -155,6 +158,7 @@ export default function EventHomePage() {
         description="Everything you need to get ready for your event."
       />
 
+      <EmailVerificationBanner status={data.email_verification} email={auth?.user?.email} />
       <EventAccessBanner level={data.access_level} reason={data.reason} />
 
       {data.events.map((e) => <EventSummary key={e.event_id} event={e} />)}

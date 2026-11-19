@@ -30,6 +30,11 @@ const EVENT = {
   registration_open: true,
 };
 
+const ACCEPTED = {
+  status: 'verification_pending', next: 'check_email', message: 'Check your email to continue.',
+  access_level: 'NONE', login_opens_on: '2026-12-02',
+};
+
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -70,18 +75,22 @@ describe('EventRegisterPage', () => {
     expect(screen.getByText(/900,00/)).toBeInTheDocument();
   });
 
-  it('on success shows the business code prominently, the login date and a Go to login button', async () => {
+  // Changed with email verification: the register response no longer carries
+  // the business code (it moved to the verification email), and every
+  // accepted registration shows the same "Check your email" screen.
+  it('on success shows "Check your email" with the address, the login date, resend and Go to login', async () => {
     vi.mocked(apiClient.get).mockResolvedValue(EVENT as never);
-    vi.mocked(apiClient.post).mockResolvedValue({
-      business_code: 'K7Q2XM', next: 'login', access_level: 'NONE', login_opens_on: '2026-12-02',
-    } as never);
+    vi.mocked(apiClient.post).mockResolvedValue(ACCEPTED as never);
     renderPage();
     await fillForm();
     fireEvent.click(screen.getByRole('button', { name: 'Register' }));
 
-    expect(await screen.findByTestId('business-code')).toHaveTextContent('K7Q2XM');
+    expect(await screen.findByText('Check your email')).toBeInTheDocument();
+    expect(screen.getByTestId('check-email')).toHaveTextContent('thandi@example.com');
+    expect(screen.queryByTestId('business-code')).not.toBeInTheDocument();
     expect(screen.getByTestId('login-opens')).toHaveTextContent(/2 Dec 2026/);
     expect(screen.getByRole('link', { name: 'Go to login' })).toHaveAttribute('href', '/login');
+    expect(screen.getByRole('button', { name: /Resend verification email/ })).toBeEnabled();
 
     expect(apiClient.post).toHaveBeenCalledWith('/v1/public/events/summer-souk/register', {
       registration_code: 'ABC123',
@@ -98,13 +107,25 @@ describe('EventRegisterPage', () => {
 
   it('says "now" when login_opens_on is null', async () => {
     vi.mocked(apiClient.get).mockResolvedValue(EVENT as never);
-    vi.mocked(apiClient.post).mockResolvedValue({
-      business_code: 'K7Q2XM', next: 'login', access_level: 'CONFIGURE', login_opens_on: null,
-    } as never);
+    vi.mocked(apiClient.post).mockResolvedValue({ ...ACCEPTED, access_level: 'CONFIGURE', login_opens_on: null } as never);
     renderPage();
     await fillForm();
     fireEvent.click(screen.getByRole('button', { name: 'Register' }));
     expect(await screen.findByTestId('login-opens')).toHaveTextContent(/log in now/);
+  });
+
+  it('resends the verification email for the address typed, then counts down before allowing another', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue(EVENT as never);
+    vi.mocked(apiClient.post).mockResolvedValueOnce(ACCEPTED as never).mockResolvedValueOnce(
+      { status: 'accepted', message: 'ok' } as never);
+    renderPage();
+    await fillForm();
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Resend verification email/ }));
+    expect(await screen.findByRole('button', { name: /Resend in 60s/ })).toBeDisabled();
+    expect(apiClient.post).toHaveBeenLastCalledWith('/v1/public/auth/resend-verification', { email: 'thandi@example.com' });
+    // The note never claims an email was sent (the backend does not say).
+    expect(screen.getByTestId('resend-note')).toHaveTextContent(/If this email still needs confirming/);
   });
 
   it('shows the same generic message for a 403 and never says why', async () => {

@@ -82,6 +82,25 @@ describe('EventHomePage', () => {
     expect(screen.getByText('Durban Summer Souk')).toBeInTheDocument();
   });
 
+  it('shows the confirm-your-email banner while verification is pending, with the EMAIL_NOT_VERIFIED reason', async () => {
+    mockApi({ ...access('CONFIGURE', 'EMAIL_NOT_VERIFIED'), email_verification: { required: true, verified: false } } as never);
+    renderAt(<EventHomePage />);
+    expect(await screen.findByTestId('email-verification-banner')).toHaveTextContent(/Confirm your email address/);
+    expect(screen.getByTestId('event-access-banner')).toHaveTextContent(/selling stays closed until you confirm your email/);
+  });
+
+  it('shows no verification banner once verified, or when verification is not required', async () => {
+    mockApi({ ...access('TRADE', 'PAID_DAY'), email_verification: { required: true, verified: true } } as never);
+    const first = renderAt(<EventHomePage />);
+    await screen.findByText('Choose your event days');
+    expect(screen.queryByTestId('email-verification-banner')).not.toBeInTheDocument();
+    first.unmount();
+    mockApi({ ...access('TRADE', 'PAID_DAY'), email_verification: { required: false, verified: true } } as never);
+    renderAt(<EventHomePage />);
+    await screen.findByText('Choose your event days');
+    expect(screen.queryByTestId('email-verification-banner')).not.toBeInTheDocument();
+  });
+
   it('shows the clothing note about sizes and colours only for a clothing vendor', async () => {
     mockApi(access('CONFIGURE', 'PREP_WINDOW', true, 'CLOTHING'));
     renderAt(<EventHomePage />);
