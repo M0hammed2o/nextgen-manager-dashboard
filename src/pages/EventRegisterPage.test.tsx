@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import EventRegisterPage from './EventRegisterPage';
+import EventRegisterPage, { EventSlugRedirect } from './EventRegisterPage';
 import { apiClient, ApiError } from '@/lib/api-client';
 
 vi.mock('@/lib/api-client', async () => {
@@ -35,13 +35,14 @@ const ACCEPTED = {
   access_level: 'NONE', login_opens_on: '2099-12-02',
 };
 
-function renderPage() {
+function renderPage(path = '/events/summer-souk/register') {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={['/events/summer-souk/register']}>
+      <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/events/:slug/register" element={<EventRegisterPage />} />
+          <Route path="/events/:slug" element={<EventSlugRedirect />} />
           <Route path="/login" element={<p>login page</p>} />
         </Routes>
       </MemoryRouter>
@@ -103,6 +104,13 @@ describe('EventRegisterPage', () => {
     });
     // The password is not left anywhere in the DOM.
     expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
+  });
+
+  it('sends the bare /events/<slug> link to the event registration page instead of Not Found', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue(EVENT as never);
+    renderPage('/events/summer-souk');
+    expect(await screen.findByText('Durban Summer Souk')).toBeInTheDocument();
+    expect(apiClient.get).toHaveBeenCalledWith('/v1/public/events/summer-souk');
   });
 
   it('says "now" when login_opens_on is null', async () => {
@@ -185,6 +193,20 @@ describe('EventRegisterPage', () => {
     expect(screen.getByText(/72 bytes/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Register' }));
     expect(apiClient.post).not.toHaveBeenCalled();
+  });
+
+  it('makes the whole terms row a 44px tap target that toggles the checkbox (e2e: 16x16 box)', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue(EVENT as never);
+    renderPage();
+    const row = await screen.findByTestId('reg-terms-row');
+    expect(row.className).toContain('min-h-11');
+    const box = screen.getByRole('checkbox', { name: /I accept the NextGen terms/ });
+    expect(box.className).toContain('h-6');
+    expect(box).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(row);
+    expect(box).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(screen.getByText(/I accept the NextGen terms/));
+    expect(box).toHaveAttribute('aria-checked', 'false');
   });
 
   it('keeps Register disabled until the terms are accepted', async () => {
