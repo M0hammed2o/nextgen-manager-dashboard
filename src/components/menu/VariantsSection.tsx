@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Plus, X, Grid3x3 } from 'lucide-react';
-import { apiClient } from '@/lib/api-client';
+import { apiClient, ApiError } from '@/lib/api-client';
 import { centsToRandsInput, formatCents, parseRandsToCents } from '@/lib/mappers';
 import {
   MAX_MATRIX, buildMatrixPreview, normaliseChips, variantErrorMessage,
@@ -40,6 +40,85 @@ function optionalCount(raw: string): number | null | undefined {
   return /^\d+$/.test(raw.trim()) ? parseInt(raw, 10) : null;
 }
 
+// ---- per-variant stock -----------------------------------------------------
+
+/** Signed whole-number change: '+5', '5', '-2'. '' / 0 / invalid -> null. */
+export function parseStockChange(raw: string): number | null {
+  const t = raw.trim();
+  if (!/^[+-]?\d+$/.test(t)) return null;
+  const n = parseInt(t, 10);
+  return n === 0 ? null : n;
+}
+
+/**
+ * Add or remove units of one tracked variant through the existing, audited
+ * manual-adjustment endpoint (POST /v1/business/inventory/adjustments,
+ * owner/manager, business from the JWT). A signed change rather than "set to"
+ * so a sale rung up meanwhile is never overwritten.
+ */
+function StockAdjustForm({ variant, onClose }: { variant: Variant; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [change, setChange] = useState('');
+  const [reason, setReason] = useState('Stock count correction');
+  const delta = parseStockChange(change);
+  const current = variant.stock_on_hand ?? 0;
+  const after = delta === null ? null : current + delta;
+  const problem =
+    change.trim() === '' ? null
+    : delta === null ? 'Enter a whole number of units, like 5 to add or -2 to remove.'
+    : after !== null && after < 0 ? `That would leave ${after} in stock. You have ${current}.`
+    : reason.trim().length < 3 ? 'Give a reason (at least 3 characters).'
+    : null;
+
+  const adjust = useMutation({
+    mutationFn: () =>
+      apiClient.post('/v1/business/inventory/adjustments', {
+        ingredient_id: variant.ingredient_id, quantity: String(delta), unit: 'unit', reason: reason.trim(),
+      }),
+    onSuccess: () => {
+      toast({ title: 'Stock updated', description: `${variant.label}: ${current} → ${after} in stock` });
+      qc.invalidateQueries({ queryKey: variantsKey(variant.menu_item_id) });
+      onClose();
+    },
+    onError: (err) => toast({
+      title: 'Could not update stock',
+      description: err instanceof ApiError && err.code === 'INVENTORY_NOT_ENABLED'
+        ? 'Stock tracking (inventory) is not switched on for this business.'
+        : variantErrorMessage(err),
+      variant: 'destructive',
+    }),
+  });
+
+  return (
+    <div className="rounded-md border border-border bg-muted/30 p-2 space-y-2" aria-label={`Adjust stock for ${variant.label}`}>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <Label htmlFor={`vsc-${variant.id}`} className="text-xs">Change in units (- to remove)</Label>
+          <Input
+            id={`vsc-${variant.id}`} inputMode="numeric" placeholder="e.g. 5 or -2" value={change}
+            onChange={(e) => setChange(e.target.value)} aria-invalid={!!problem}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor={`vsr-${variant.id}`} className="text-xs">Reason</Label>
+          <Input id={`vsr-${variant.id}`} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={255} />
+        </div>
+      </div>
+      {after !== null && !problem && (
+        <p className="text-xs text-muted-foreground" data-testid={`stock-preview-${variant.sku}`}>{current} → {after} in stock</p>
+      )}
+      {problem && <p className="text-xs text-destructive">{problem}</p>}
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={onClose}>Cancel</Button>
+        <Button type="button" size="sm" disabled={delta === null || !!problem || adjust.isPending} onClick={() => adjust.mutate()}>
+          {adjust.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Update stock'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ---- list ------------------------------------------------------------------
 
 function VariantRow({ variant }: { variant: Variant }) {
@@ -48,6 +127,8 @@ function VariantRow({ variant }: { variant: Variant }) {
   const [price, setPrice] = useState(initialPrice);
   const [barcode, setBarcode] = useState(variant.barcode ?? '');
   const [active, setActive] = useState(variant.is_active);
+  const [adjusting, setAdjusting] = useState(false);
+  const canAdjustStock = variant.ingredient_id !== null && variant.stock_on_hand !== null;
 
   const priceCents = optionalCents(price);
   const priceInvalid = priceCents === null;
@@ -78,8 +159,17 @@ function VariantRow({ variant }: { variant: Variant }) {
         <div className="text-right text-xs text-muted-foreground shrink-0">
           <p className="text-sm font-semibold text-foreground">{formatCents(variant.effective_price_cents)}</p>
           <p>{variant.stock_on_hand === null ? 'Stock not tracked' : `${variant.stock_on_hand} in stock`}</p>
+          {canAdjustStock && !adjusting && (
+            <Button
+              type="button" variant="link" size="sm" className="h-auto p-0 text-xs"
+              onClick={() => setAdjusting(true)} aria-label={`Adjust stock for ${variant.label}`}
+            >
+              Adjust stock
+            </Button>
+          )}
         </div>
       </div>
+      {adjusting && <StockAdjustForm variant={variant} onClose={() => setAdjusting(false)} />}
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
           <Label htmlFor={`vp-${variant.id}`} className="text-xs">Price override (R)</Label>

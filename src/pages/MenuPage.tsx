@@ -30,6 +30,7 @@ import {
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { VariantsSection } from '@/components/menu/VariantsSection';
+import { useEventAccess } from '@/hooks/use-event-access';
 
 // ── Shared money helper ───────────────────────────────────────────────────────
 
@@ -123,6 +124,12 @@ function ItemsTab({ categories, items }: { categories: MenuCategory[]; items: Me
   const [editingCategory, setEditingCategory] = useState<MenuCategory | null>(null);
   const [showEditCategoryModal, setShowEditCategoryModal] = useState(false);
   const [deleteItemTarget, setDeleteItemTarget] = useState<MenuItem | null>(null);
+  // Set right after a clothing vendor creates an item: the dialog then offers
+  // "Add sizes & colours" (variants need a saved item) instead of closing.
+  const [justCreated, setJustCreated] = useState<MenuItem | null>(null);
+  const access = useEventAccess();
+  const sellsClothing = !!access.data?.is_event_vendor && access.data.events.some((e) => e.category === 'CLOTHING');
+  const closeItemModal = () => { setShowItemModal(false); setJustCreated(null); };
 
   const deleteItemMutation = useMutation({
     mutationFn: (id: string) => apiClient.delete(`/v1/business/menu/items/${id}`),
@@ -263,11 +270,20 @@ function ItemsTab({ categories, items }: { categories: MenuCategory[]; items: Me
                     )}
                   </div>
                   <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditingItem(item); setShowItemModal(true); }}>
-                      <Edit className="w-3.5 h-3.5" />
+                    <Button
+                      variant="ghost" size="icon" className="h-8 w-8"
+                      aria-label={`Edit ${item.name}`}
+                      title={sellsClothing ? 'Edit item, sizes and colours' : 'Edit item'}
+                      onClick={() => { setEditingItem(item); setJustCreated(null); setShowItemModal(true); }}
+                    >
+                      <Edit className="w-3.5 h-3.5" aria-hidden="true" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteItemTarget(item)}>
-                      <Trash2 className="w-3.5 h-3.5" />
+                    <Button
+                      variant="ghost" size="icon" className="h-8 w-8 text-destructive"
+                      aria-label={`Delete ${item.name}`} title="Delete item"
+                      onClick={() => setDeleteItemTarget(item)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                     </Button>
                   </div>
                 </div>
@@ -277,10 +293,32 @@ function ItemsTab({ categories, items }: { categories: MenuCategory[]; items: Me
         </div>
       )}
 
-      <Dialog open={showItemModal} onOpenChange={setShowItemModal}>
+      <Dialog open={showItemModal} onOpenChange={(open) => (open ? setShowItemModal(true) : closeItemModal())}>
         <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editingItem ? 'Edit Item' : 'Add Item'}</DialogTitle></DialogHeader>
-          <MenuItemForm item={editingItem} categories={categories} onClose={() => setShowItemModal(false)} />
+          <DialogHeader><DialogTitle>{justCreated ? 'Item created' : editingItem ? 'Edit Item' : 'Add Item'}</DialogTitle></DialogHeader>
+          {justCreated ? (
+            <div className="space-y-4" data-testid="item-created-offer">
+              <p className="text-sm text-muted-foreground">
+                <strong className="text-foreground">{justCreated.name}</strong> is saved. Does it come in different sizes
+                or colours? Add them now: each one gets its own stock count and barcode.
+              </p>
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button type="button" variant="outline" onClick={closeItemModal}>Done</Button>
+                <Button type="button" onClick={() => { setEditingItem(justCreated); setJustCreated(null); }}>
+                  Add sizes &amp; colours
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <MenuItemForm
+              key={editingItem?.id ?? 'new'}
+              item={editingItem}
+              categories={categories}
+              onClose={closeItemModal}
+              onCreated={sellsClothing ? setJustCreated : undefined}
+              variantsHint={sellsClothing}
+            />
+          )}
         </DialogContent>
       </Dialog>
 
@@ -934,10 +972,16 @@ function MenuItemForm({
   item,
   categories,
   onClose,
+  onCreated,
+  variantsHint = false,
 }: {
   item: MenuItem | null;
   categories: MenuCategory[];
   onClose: () => void;
+  /** When set, a successful create hands the new item over instead of closing. */
+  onCreated?: (created: MenuItem) => void;
+  /** Tell a new-item author that sizes/colours come after saving. */
+  variantsHint?: boolean;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1007,11 +1051,12 @@ function MenuItemForm({
     mutationFn: (data: CreateMenuItemRequest | UpdateMenuItemRequest) =>
       item
         ? apiClient.put(`/v1/business/menu/items/${item.id}`, data)
-        : apiClient.post('/v1/business/menu/items', data),
-    onSuccess: () => {
+        : apiClient.post<MenuItem>('/v1/business/menu/items', data),
+    onSuccess: (saved) => {
       queryClient.invalidateQueries({ queryKey: ['menu-items'] });
       toast({ title: item ? 'Item updated' : 'Item created' });
-      onClose();
+      if (!item && onCreated && saved && typeof saved === 'object' && 'id' in saved) onCreated(saved as MenuItem);
+      else onClose();
     },
     onError: (err: Error) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
   });
@@ -1129,6 +1174,11 @@ function MenuItemForm({
         <Switch checked={requiresPreparation} onCheckedChange={setRequiresPreparation} />
       </div>
       {item && <VariantsSection itemId={item.id} itemName={item.name} />}
+      {!item && variantsHint && (
+        <p className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground" data-testid="variants-after-create-hint">
+          Sizes and colours: create the item first, then you can add them straight away.
+        </p>
+      )}
       {item && (
         <div className="flex items-center gap-2">
           <Switch checked={isAvailable} onCheckedChange={setIsAvailable} />
