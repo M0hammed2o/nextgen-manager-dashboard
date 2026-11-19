@@ -474,6 +474,8 @@ export interface BusinessSettings {
   pos_direct_eft_enabled: boolean;
   pos_other_payment_enabled: boolean;
   pos_table_number_required: boolean;
+  /** Largest POS discount (cents) a STAFF/MANAGER may give without the owner; 0 = none. OWNER-only to change. */
+  max_staff_discount_cents?: number;
   // Staff app navigation — which tabs this tenant's bottom bar shows. These
   // hide tabs only; the underlying features and their APIs are untouched.
   staff_live_orders_tab_enabled: boolean;

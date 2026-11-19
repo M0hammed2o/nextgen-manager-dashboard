@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { PageHeader, PageSkeleton } from '@/components/shared/PageComponents';
 import MenuImagesManager from '@/components/settings/MenuImagesManager';
+import { StaffDiscountLimitCard } from '@/components/settings/StaffDiscountLimitCard';
 import { Loader2, Save } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
@@ -746,6 +747,8 @@ export default function SettingsPage() {
             onCheckedChange={v => updateField('pos_table_number_required', v)}
           />
         </div>
+
+        <StaffDiscountLimitCard valueCents={settings?.max_staff_discount_cents ?? 0} />
       </section>
       )}
 
